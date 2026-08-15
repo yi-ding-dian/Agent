@@ -1,0 +1,2 @@
+  - cd build && bash build.sh → 绿色部署包（输出到 build/deploy/）                                                                                                                                                   
+  - cd build && bash build.sh --electron → AppImage（输出到 dist-electron/）   

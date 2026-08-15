@@ -1,0 +1,69 @@
+# ============================================
+# MyAgent .gitignore
+# 分类列出；data/ 与 build/deploy/ 含用户真实数据与密钥，严禁解除排除
+# ============================================
+
+# ── 依赖 ──────────────────────────────────
+node_modules/
+**/node_modules/
+
+# ── 构建产物 ──────────────────────────────
+**/dist/
+**/dist-electron/
+**/frontend-dist/
+backend/dist/
+frontend/dist/
+build/dist/
+build/dist-electron/
+build/frontend-dist/
+# 部署副本：含真实 API key（webSearch.js）与用户数据（myagent.db），严禁提交
+build/deploy/
+# 前端构建产物（hash CSS）
+build/index-*.css
+*.tsbuildinfo            # tsc 增量编译缓存
+
+# ── 运行时数据（用户真实数据：DB / 配置 / API key / 知识库 token）────
+data/
+
+# ── 环境变量（真实密钥）──────────────────
+.env
+.env.local
+.env.*.local
+
+# ── 日志 ──────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# ── 本地工具 / 编辑器 ────────────────────
+# 本地 Claude Code 配置（settings.local.json 含本地权限规则示例）
+.claude/
+.dev.pids
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# ── 操作记录与开发文档（含环境信息/内网地址）────
+record.md
+**/record.md
+开发记录/
+
+# ── 运行时技能 / 扩展数据 ─────────────────
+.pi/
+
+# ── 业务数据文档（非源码，知识库资料）────
+**/珠海*.md
+**/zhuhai*.md
+**/zhengzhou*.md
+test读取目录/
+
+# ── 冒烟 / 一次性脚本（含开发机绝对路径）─
+build/smoke/
+
+# ── 桌面端打包产物 ───────────────────────
+*.AppImage
+*.asar
+*.dmg
+*.exe

@@ -1,0 +1,38 @@
+{
+  "name": "myagent-backend",
+  "version": "0.1.0",
+  "description": "MyAgent 后端服务（Express + TypeScript，基于 pi-mono）",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "esbuild src/index.ts --bundle --format=esm --platform=node --packages=external --outfile=dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/index.js",
+    "test": "node --import tsx --test tests/unit/*.test.ts",
+    "build:electron": "esbuild src/agent-engine/index.ts --bundle --outfile=../build/dist/agent-engine.mjs --format=esm --platform=node --packages=external --target=node20"
+  },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "^0.80.10",
+    "@earendil-works/pi-ai": "^0.80.10",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/sql.js": "^1.4.11",
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^13.0.1",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "sql.js": "^1.14.1",
+    "typebox": "1.1.38",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0"
+  }
+}

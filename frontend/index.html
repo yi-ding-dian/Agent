@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MyAgent</title>
+  <!-- 主题防闪烁：首帧前恢复 localStorage 主题（兼容旧 piagent_theme key），非法/无值保持默认（不设属性） -->
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('myagent_theme') || localStorage.getItem('piagent_theme');
+        if (t === 'dark' || t === 'ocean' || t === 'forest' || t === 'violet') {
+          document.documentElement.setAttribute('data-theme', t);
+        }
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>

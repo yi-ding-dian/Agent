@@ -1,0 +1,39 @@
+{
+  "name": "myagent-electron",
+  "version": "1.0.0",
+  "description": "MyAgent 桌面应用（Electron）",
+  "license": "MIT",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "pack": "electron-builder --linux AppImage"
+  },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "^0.80.10",
+    "@earendil-works/pi-ai": "^0.80.10",
+    "tsx": "^4.23.1",
+    "typebox": "1.1.38",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
+    "esbuild": "^0.28.1",
+    "typescript": "^5.5.0"
+  },
+  "build": {
+    "appId": "com.myagent.desktop",
+    "productName": "MyAgent",
+    "linux": {
+      "target": "AppImage",
+      "category": "Utility"
+    },
+    "files": [
+      "dist/**/*",
+      "frontend-dist/**/*"
+    ],
+    "directories": {
+      "output": "./dist-electron"
+    }
+  }
+}

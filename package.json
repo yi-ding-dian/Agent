@@ -1,0 +1,9 @@
+{
+  "name": "myagent",
+  "version": "1.0.0",
+  "description": "MyAgent - 个人智能 Agent 系统（Express + React，基于 pi-mono）",
+  "license": "MIT",
+  "dependencies": {
+    "pi-agent-pi-markitdown": "^1.0.2"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "myagent-extensions",
+  "version": "1.0.0",
+  "description": "MyAgent 扩展依赖容器",
+  "license": "MIT",
+  "dependencies": {
+    "pi-agent-pi-markitdown": "^1.0.2"
+  }
+}

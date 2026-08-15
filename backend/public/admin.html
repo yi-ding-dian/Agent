@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MyAgent 用户管理</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f0f2f5;
+      color: #333;
+      min-height: 100vh;
+    }
+    .login-container {
+      max-width: 400px;
+      margin: 100px auto;
+      padding: 40px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+    }
+    .login-container h1 {
+      text-align: center;
+      margin-bottom: 30px;
+      color: #1a73e8;
+      font-size: 24px;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 500;
+      font-size: 14px;
+      color: #555;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: border-color 0.2s;
+    }
+    .form-group input:focus {
+      outline: none;
+      border-color: #1a73e8;
+      box-shadow: 0 0 0 3px rgba(26,115,232,0.15);
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      width: 100%;
+      background: #1a73e8;
+      color: #fff;
+    }
+    .btn-primary:hover { background: #1557b0; }
+    .btn-small {
+      padding: 6px 14px;
+      font-size: 13px;
+    }
+    .btn-danger { background: #e74c3c; color: #fff; }
+    .btn-danger:hover { background: #c0392b; }
+    .btn-success { background: #27ae60; color: #fff; }
+    .btn-success:hover { background: #219a52; }
+    .btn-outline {
+      background: #fff;
+      color: #1a73e8;
+      border: 1px solid #1a73e8;
+    }
+    .btn-outline:hover { background: #e8f0fe; }
+    .error-msg {
+      color: #e74c3c;
+      font-size: 13px;
+      margin-bottom: 15px;
+      text-align: center;
+    }
+    .main-container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 30px 20px;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+    }
+    .header h1 { font-size: 24px; color: #1a73e8; }
+    .header-actions { display: flex; gap: 10px; align-items: center; }
+    .header-actions span { color: #666; font-size: 14px; }
+    table {
+      width: 100%;
+      background: #fff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    th, td {
+      padding: 14px 18px;
+      text-align: left;
+      font-size: 14px;
+    }
+    th {
+      background: #f8f9fa;
+      font-weight: 600;
+      color: #555;
+      border-bottom: 2px solid #eee;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    td { border-bottom: 1px solid #f0f0f0; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f8f9ff; }
+    .actions { display: flex; gap: 8px; }
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #999;
+    }
+    .toast {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 12px 24px;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 14px;
+      z-index: 1000;
+      animation: fadeIn 0.3s ease;
+    }
+    .toast-success { background: #27ae60; }
+    .toast-error { background: #e74c3c; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+    }
+    .modal {
+      background: #fff;
+      border-radius: 12px;
+      padding: 30px;
+      width: 440px;
+      max-width: 90vw;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+    }
+    .modal h2 {
+      margin-bottom: 24px;
+      font-size: 20px;
+      color: #333;
+    }
+    .modal .form-group:last-of-type { margin-bottom: 24px; }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<!-- 登录界面 -->
+<div id="loginPage" class="login-container">
+  <h1>MyAgent 管理后台</h1>
+  <div id="loginError" class="error-msg hidden"></div>
+  <div class="form-group">
+    <label>账号</label>
+    <input type="text" id="loginAccount" placeholder="请输入管理员账号" autocomplete="username">
+  </div>
+  <div class="form-group">
+    <label>密码</label>
+    <input type="password" id="loginPassword" placeholder="请输入密码" autocomplete="current-password">
+  </div>
+  <button class="btn btn-primary" id="loginBtn">登 录</button>
+</div>
+
+<!-- 主界面 -->
+<div id="mainPage" class="main-container hidden">
+  <div class="header">
+    <h1>用户管理</h1>
+    <div class="header-actions">
+      <span id="currentAdmin"></span>
+      <button class="btn btn-outline btn-small" id="addUserBtn">+ 新建用户</button>
+      <button class="btn btn-small btn-outline" id="logoutBtn">退出</button>
+    </div>
+  </div>
+  <table id="userTable">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>用户名</th>
+        <th>账号</th>
+        <th>上次登录</th>
+        <th>上次退出</th>
+        <th>创建时间</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody id="userTableBody"></tbody>
+  </table>
+  <div id="emptyState" class="empty-state hidden">暂无用户数据</div>
+</div>
+
+<!-- 新建/编辑用户弹窗 -->
+<div id="userModal" class="modal-overlay hidden">
+  <div class="modal">
+    <h2 id="modalTitle">新建用户</h2>
+    <div id="modalError" class="error-msg hidden"></div>
+    <input type="hidden" id="editUserId">
+    <div class="form-group">
+      <label>用户名（显示名）</label>
+      <input type="text" id="editUsername" placeholder="例如：李四">
+    </div>
+    <div class="form-group">
+      <label>登录账号</label>
+      <input type="text" id="editAccount" placeholder="登录用的账号" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label>密码</label>
+      <input type="text" id="editPassword" placeholder="登录密码" autocomplete="off">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline btn-small" id="cancelModalBtn">取消</button>
+      <button class="btn btn-success btn-small" id="saveUserBtn">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // 兼容迁移：新版 key 为 myagent_admin_token；旧 piagent_admin_token 有值则读取并迁移（不丢登录态）
+  const LEGACY_TOKEN_KEY = 'piagent_admin_token';
+  const TOKEN_KEY = 'myagent_admin_token';
+  let authToken = localStorage.getItem(TOKEN_KEY);
+  if (!authToken) {
+    authToken = localStorage.getItem(LEGACY_TOKEN_KEY);
+    if (authToken) {
+      localStorage.setItem(TOKEN_KEY, authToken);
+      localStorage.removeItem(LEGACY_TOKEN_KEY);
+    }
+  }
+
+  // DOM 元素
+  const loginPage = document.getElementById('loginPage');
+  const mainPage = document.getElementById('mainPage');
+  const loginError = document.getElementById('loginError');
+  const userTableBody = document.getElementById('userTableBody');
+  const emptyState = document.getElementById('emptyState');
+  const userModal = document.getElementById('userModal');
+  const modalTitle = document.getElementById('modalTitle');
+  const modalError = document.getElementById('modalError');
+
+  // 显示 toast
+  function showToast(msg, type) {
+    const t = document.createElement('div');
+    t.className = 'toast toast-' + type;
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 3000);
+  }
+
+  // API 请求封装
+  async function api(method, path, body) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+    const opts = { method, headers };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch('/api' + path, opts);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || '请求失败');
+    return data;
+  }
+
+  // 登录
+  document.getElementById('loginBtn').addEventListener('click', async () => {
+    const account = document.getElementById('loginAccount').value.trim();
+    const password = document.getElementById('loginPassword').value.trim();
+    if (!account || !password) {
+      loginError.textContent = '请输入账号和密码';
+      loginError.classList.remove('hidden');
+      return;
+    }
+    try {
+      const data = await api('POST', '/auth/login', { account, password });
+      authToken = data.token;
+      localStorage.setItem(TOKEN_KEY, authToken);
+      document.getElementById('currentAdmin').textContent = '管理员: ' + data.user.username;
+      loginPage.classList.add('hidden');
+      mainPage.classList.remove('hidden');
+      loginError.classList.add('hidden');
+      loadUsers();
+    } catch (e) {
+      loginError.textContent = e.message;
+      loginError.classList.remove('hidden');
+    }
+  });
+
+  // 回车登录
+  document.getElementById('loginPassword').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('loginBtn').click();
+  });
+
+  // 登出
+  document.getElementById('logoutBtn').addEventListener('click', async () => {
+    try { await api('POST', '/auth/logout'); } catch {}
+    authToken = null;
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(LEGACY_TOKEN_KEY);
+    loginPage.classList.remove('hidden');
+    mainPage.classList.add('hidden');
+  });
+
+  // 加载用户列表
+  async function loadUsers() {
+    try {
+      const data = await api('GET', '/admin/users');
+      userTableBody.innerHTML = '';
+      if (data.users.length === 0) {
+        emptyState.classList.remove('hidden');
+        return;
+      }
+      emptyState.classList.add('hidden');
+      data.users.forEach((u) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = [
+          '<td>' + u.id + '</td>',
+          '<td>' + escHtml(u.username) + '</td>',
+          '<td>' + escHtml(u.account) + '</td>',
+          '<td>' + (u.last_login_at || '-') + '</td>',
+          '<td>' + (u.last_logout_at || '-') + '</td>',
+          '<td>' + (u.created_at || '-') + '</td>',
+          '<td class="actions">' +
+            '<button class="btn btn-outline btn-small" data-action="edit" data-id="' + u.id + '">编辑</button>' +
+            '<button class="btn btn-danger btn-small" data-action="delete" data-id="' + u.id + '">删除</button>' +
+          '</td>',
+        ].join('');
+        userTableBody.appendChild(tr);
+      });
+    } catch (e) {
+      showToast('加载用户失败: ' + e.message, 'error');
+    }
+  }
+
+  // 新建用户按钮
+  document.getElementById('addUserBtn').addEventListener('click', () => {
+    document.getElementById('modalTitle').textContent = '新建用户';
+    document.getElementById('editUserId').value = '';
+    document.getElementById('editUsername').value = '';
+    document.getElementById('editAccount').value = '';
+    document.getElementById('editPassword').value = '';
+    modalError.classList.add('hidden');
+    userModal.classList.remove('hidden');
+  });
+
+  // 编辑用户
+  userTableBody.addEventListener('click', async (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    const action = btn.dataset.action;
+    const id = btn.dataset.id;
+
+    if (action === 'edit') {
+      try {
+        const data = await api('GET', '/admin/users/' + id);
+        document.getElementById('modalTitle').textContent = '编辑用户';
+        document.getElementById('editUserId').value = data.user.id;
+        document.getElementById('editUsername').value = data.user.username;
+        document.getElementById('editAccount').value = data.user.account;
+        document.getElementById('editPassword').value = '';
+        document.getElementById('editPassword').placeholder = '留空则不修改密码';
+        modalError.classList.add('hidden');
+        userModal.classList.remove('hidden');
+      } catch (e) {
+        showToast('获取用户信息失败: ' + e.message, 'error');
+      }
+    } else if (action === 'delete') {
+      if (!confirm('确定要删除该用户吗？其所有会话数据也将被删除。')) return;
+      try {
+        await api('DELETE', '/admin/users/' + id);
+        showToast('用户已删除', 'success');
+        loadUsers();
+      } catch (e) {
+        showToast('删除失败: ' + e.message, 'error');
+      }
+    }
+  });
+
+  // 保存用户
+  document.getElementById('saveUserBtn').addEventListener('click', async () => {
+    const editId = document.getElementById('editUserId').value;
+    const username = document.getElementById('editUsername').value.trim();
+    const account = document.getElementById('editAccount').value.trim();
+    const password = document.getElementById('editPassword').value.trim();
+
+    if (!username || !account) {
+      modalError.textContent = '用户名和账号为必填项';
+      modalError.classList.remove('hidden');
+      return;
+    }
+    if (!editId && !password) {
+      modalError.textContent = '新建用户需要填写密码';
+      modalError.classList.remove('hidden');
+      return;
+    }
+
+    try {
+      if (editId) {
+        const body = { username, account };
+        if (password) body.password = password;
+        await api('PUT', '/admin/users/' + editId, body);
+        showToast('用户已更新', 'success');
+      } else {
+        await api('POST', '/admin/users', { username, account, password });
+        showToast('用户已创建', 'success');
+      }
+      userModal.classList.add('hidden');
+      loadUsers();
+    } catch (e) {
+      modalError.textContent = e.message;
+      modalError.classList.remove('hidden');
+    }
+  });
+
+  // 关闭弹窗
+  document.getElementById('cancelModalBtn').addEventListener('click', () => {
+    userModal.classList.add('hidden');
+  });
+
+  function escHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  // 如果已有 token，自动验证
+  if (authToken) {
+    api('GET', '/auth/me').then((data) => {
+      document.getElementById('currentAdmin').textContent = '管理员: ' + data.user.username;
+      loginPage.classList.add('hidden');
+      mainPage.classList.remove('hidden');
+      loadUsers();
+    }).catch(() => {
+      authToken = null;
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(LEGACY_TOKEN_KEY);
+    });
+  }
+</script>
+</body>
+</html>

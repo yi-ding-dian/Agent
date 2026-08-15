@@ -1,0 +1,15 @@
+{
+  "name": "myagent-mcp-server",
+  "version": "1.0.0",
+  "description": "MyAgent 内置 MCP server（echo / calculator / get_time / web_search / kb_query）",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node client/test-client.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^4.4.3"
+  }
+}
