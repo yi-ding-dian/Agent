@@ -32,6 +32,21 @@
       "dist/**/*",
       "frontend-dist/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "../mcp",
+        "to": "mcp",
+        "filter": [
+          "**/*",
+          "!client/**",
+          "!record.md",
+          "!README.md",
+          "!start.sh",
+          "!stop.sh",
+          "!node_modules/.bin/**"
+        ]
+      }
+    ],
     "directories": {
       "output": "./dist-electron"
     }

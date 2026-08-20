@@ -202,6 +202,25 @@ function createWindow(): void {
   // 已取消连接页：直接加载前端页面（服务器地址由主进程配置提供，登录页设置面板可改）
   mainWindow.loadFile(path.join(__dirname, '../frontend-dist/index.html'));
 
+  // ─── 拖放导航拦截：目录/文件拖到窗口时，Electron 默认导航到 file://<路径> ───
+  // 渲染进程拿不到拖入目录的路径（Electron 33 移除 File.path、拖目录时 text/uri-list
+  // 为空、webkitGetAsEntry 对目录返回 null），由这里拦截导航提取路径，
+  // 推送给渲染进程切换工作目录。loadFile 与 http 导航不受影响。
+  mainWindow.webContents.on('will-navigate', (e, url) => {
+    if (!url.startsWith('file://')) return;
+    e.preventDefault(); // 阻止导航到 file://
+    try {
+      const filePath = decodeURIComponent(url.replace(/^file:\/\//, ''));
+      const stat = fs.statSync(filePath);
+      // 目录 URL 可能带尾部斜杠（file:///dir/），统一去掉
+      const dir = (stat.isDirectory() ? filePath : path.dirname(filePath)).replace(/\/+$/, '');
+      console.log('[Main] 拖放路径:', dir);
+      mainWindow?.webContents.send('drop-directory', dir);
+    } catch {
+      // 忽略无法解析的路径
+    }
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });

@@ -49,4 +49,10 @@ contextBridge.exposeInMainWorld('myagent', {
     ipcRenderer.on('agent:engine-status', handler);
     return () => ipcRenderer.removeListener('agent:engine-status', handler);
   },
+  /** 订阅主进程推送的拖放目录路径（Electron 拖目录导航被 will-navigate 拦截后触发） */
+  onDropDirectory: (cb: (dir: string) => void): (() => void) => {
+    const handler = (_e: unknown, dir: string) => cb(dir);
+    ipcRenderer.on('drop-directory', handler);
+    return () => ipcRenderer.removeListener('drop-directory', handler);
+  },
 });
