@@ -1956,11 +1956,39 @@ a:hover {
 .settings-content {
   flex: 1;
   min-width: 0;
-  padding: 20px 24px;
+  min-height: 0; /* flex 滚动保险：内容超出时可滚动 */
+  padding: 12px 20px 14px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
+}
+
+/* 关键修复：禁止 flex 均分/压缩设置内容区块。
+   此前 .form-group 全局定义 flex:1（flex-basis:0%），settings-content 高度不足时
+   flex-shrink 会把区块压扁；其中 .thinking-slider-group 因 overflow:hidden 使
+   min-height 塌陷为 0，成为唯一可被压扁的区块 —— 推理深度滑杆及其 labels 被
+   裁出可视区，且内容被压缩后无溢出、settings-content 无滚动空间，用户既看不到
+   也拖不到滑杆（Firefox/Chromium 均复现）。改为按内容高度排布后，滑杆所在区块
+   固定在顶部任何视口均可见，内容超高时由 settings-content 正常滚动。 */
+.settings-content > .form-group,
+.settings-content > .form-row {
+  flex: none;
+}
+
+/* 滚动条明显化（矮视口下让用户知道可滚动） */
+.settings-content::-webkit-scrollbar {
+  width: 8px;
+}
+.settings-content::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text-muted) 40%, transparent);
+  border-radius: 4px;
+}
+.settings-content::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--text-muted) 60%, transparent);
+}
+.settings-content::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 /* ---- 设置弹窗固定尺寸（两栏布局 + 加宽；切换菜单/内容时尺寸不跳动） ---- */
@@ -2360,7 +2388,7 @@ a:hover {
 
 .form-group textarea {
   resize: vertical;
-  min-height: 60px;
+  min-height: 44px;
 }
 
 .form-group input[type="range"] {
@@ -2375,12 +2403,14 @@ a:hover {
 /* ---- 推理深度滑块 ---- */
 .thinking-slider-group {
   position: relative;
-  padding: 12px 16px;
+  padding: 10px 14px;
   border-radius: var(--radius-sm);
   background: var(--surface);
   transition: background 0.5s, box-shadow 0.5s;
-  margin-top: 8px;
-  overflow: hidden;
+  margin-top: 6px;
+  /* 注意：这里不能设 overflow:hidden —— 会让 flex 布局下 min-height 塌陷为 0，
+     区块内容（含滑杆）被压缩裁掉。火苗粒子的裁剪改由 .thinking-fire-particles 自身负责 */
+  overflow: visible;
 }
 
 .thinking-slider-group.fire-active {
@@ -2445,6 +2475,23 @@ a:hover {
   transition: box-shadow 0.3s, border-color 0.3s;
 }
 
+/* Firefox 兼容：range 的轨道与 thumb 需 -moz- 前缀，否则控件不可见 */
+.thinking-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, #4a9eff 0%, #6c5ce7 40%, #e17055 80%, #ff4400 100%);
+}
+
+.thinking-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--accent);
+  cursor: pointer;
+  transition: box-shadow 0.3s, border-color 0.3s;
+}
+
 .fire-active .thinking-slider::-webkit-slider-thumb {
   border-color: #ff4400;
   background: #ffdd99;
@@ -2466,6 +2513,9 @@ a:hover {
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.3s;
+  /* 粒子裁剪由容器自身负责（.thinking-slider-group 不能设 overflow:hidden，
+     否则 flex 压缩时会把整个区块裁掉） */
+  overflow: hidden;
 }
 
 .fire-active .thinking-fire-particles {
@@ -2510,12 +2560,36 @@ a:hover {
   100% { transform: translateY(-45px) scale(0.3); opacity: 0; background: #ff3300; }
 }
 
+/* ---- 当前模型行（常规 tab 思考区块顶部）---- */
+.current-model-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.current-model-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.current-model-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: right;
+  word-break: break-all;
+}
+
 /* ---- 思考开关（switch 模式）---- */
 .thinking-switch-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 8px;
+  margin-top: 4px;
 }
 
 .thinking-switch-label {

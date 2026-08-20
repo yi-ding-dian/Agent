@@ -1,11 +1,12 @@
 import { Agent } from '@earendil-works/pi-agent-core';
-import type { AgentTool, AgentMessage } from '@earendil-works/pi-agent-core';
+import type { AgentTool, AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type { Model, Message } from '@earendil-works/pi-ai';
 import { streamSimple } from '@earendil-works/pi-ai/compat';
 import { config } from '../config.js';
 import { pendingConfirmationManager } from '../confirmation/manager.js';
 import { getToolPermissionAction } from '../config/tool-permission-config.js';
 import { runToolCallHooks, runBeforeProviderRequestHooks } from '../services/extension-loader.js';
+import { AgentRateLimiter } from '../services/rate-limiter.js';
 import type { SSEEvent } from '../utils/sse.js';
 import { buildThinkingCompat, buildOnPayload } from './model-adapter.js';
 
@@ -123,25 +124,31 @@ export interface AgentFactoryOptions {
   sessionId: string;
   emitEvent?: (event: SSEEvent) => void;
   initialMessages?: SimpleMessage[];
+  /** 模型预设级思考模式（undefined = 跟随全局 config.thinkingLevel） */
+  thinkingLevel?: string;
 }
 
 export function createAgent(options: AgentFactoryOptions): Agent {
   const { systemPrompt, model, tools, sessionId, initialMessages } = options;
 
   const historyMsgs = initialMessages?.length ? toAgentMessages(initialMessages) : undefined;
-  console.log(`[AgentFactory] Creating agent sessionId=${sessionId} model=${model.id} baseUrl=${model.baseUrl} thinkingLevel=${(config as any).thinkingLevel} historyMsgs=${historyMsgs?.length ?? 0}`);
+  // 模型预设级思考模式优先（options.thinkingLevel），未设则跟随全局 config.thinkingLevel
+  // 注意：?? 与 || 不能在同一表达式混合（TS5076），全局兜底先取到变量再 ?? 合并
+  const globalThinkingLevel: string = (config as any).thinkingLevel || 'medium';
+  const effectiveThinkingLevel = options.thinkingLevel ?? globalThinkingLevel;
+  console.log(`[AgentFactory] Creating agent sessionId=${sessionId} model=${model.id} baseUrl=${model.baseUrl} thinkingLevel=${effectiveThinkingLevel} (preset=${options.thinkingLevel ?? 'none'}, global=${(config as any).thinkingLevel ?? 'medium'}) historyMsgs=${historyMsgs?.length ?? 0}`);
 
   // 合并模型适配层的 thinking compat（如 qwen 的 thinkingFormat）
-  const thinkingCompat = buildThinkingCompat(model.id);
+  const thinkingCompat = buildThinkingCompat(model.id, effectiveThinkingLevel);
   model.compat ??= {};
   Object.assign(model.compat, thinkingCompat);
-  const onPayload = buildOnPayload(model.id);
+  const onPayload = buildOnPayload(model.id, effectiveThinkingLevel);
 
   const agent = new Agent({
     initialState: {
       systemPrompt,
       model,
-      thinkingLevel: (config as any).thinkingLevel || 'medium',
+      thinkingLevel: effectiveThinkingLevel as ThinkingLevel,
       tools,
       messages: historyMsgs,
     },
@@ -184,11 +191,14 @@ export function createAgent(options: AgentFactoryOptions): Agent {
           // 传入的云端 key（如 DeepSeek）被丢弃，请求用占位 key 发出 → 401 → 空消息无工具调用。
           // 现在把 mdl.apiKey（含 modelOverrides.apiKey）插入回退链。
           apiKey: opts?.apiKey || (mdl as { apiKey?: string }).apiKey || config.qwenApiKey || 'sk-no-key-required',
-          maxTokens: opts?.maxTokens ?? config.defaultMaxTokens,
+          // maxTokens 回退链：opts → mdl.maxTokens（createQwenModel 已按 modelOverrides.maxTokens
+          // 模型预设级取值）→ config.defaultMaxTokens（65535 最终兜底）。原实现不读 mdl.maxTokens，
+          // 链路在最后一环是断的（预设 maxTokens 不会真正发到 provider）。
+          maxTokens: opts?.maxTokens ?? (mdl as { maxTokens?: number }).maxTokens ?? config.defaultMaxTokens,
           onPayload: wrappedOnPayload,
         };
         console.log(
-          `[AgentFactory] streamFn: calling streamSimple, signal.aborted=${combinedSignal.aborted}, apiKey=${enhancedOpts.apiKey ? `${enhancedOpts.apiKey.slice(0, 6)}...` : '(none)'}`,
+          `[AgentFactory] streamFn: calling streamSimple, signal.aborted=${combinedSignal.aborted}, apiKey=${enhancedOpts.apiKey ? `${enhancedOpts.apiKey.slice(0, 6)}...` : '(none)'}, maxTokens=${enhancedOpts.maxTokens}`,
         );
         // 扩展 before_provider_request 钩子：LLM 请求发出前可修改参数
         // （handler 原地改或返回对象浅合并；异常已在分发处 try-catch，不中断请求）
@@ -328,6 +338,46 @@ export function createAgent(options: AgentFactoryOptions): Agent {
       }
       return undefined;
     },
+  });
+
+  // ─── 限流执行器接线（设置界面「Agent 限流」4 项配置真正生效）──────────
+  // pi-mono Agent 类无 maxTurns 参数 → 用 subscribe 事件计数 + abort 模式
+  // （与 subagent.tool.ts 轮数截断同模式）。每次判定实时读取 rate-limit-config
+  // （内存值，设置界面修改后即时生效，无需重启）。超限 → agent.abort() + 发
+  // rate_limit_abort 事件。abort 是优雅中止：当前轮正常收尾（消息正常
+  // message_end），loop 以 aborted 轮收尾后正常发 agent_end，事件流完整结束。
+  const rateLimiter = new AgentRateLimiter();
+  const rateLimitAborted = (reason: string) => {
+    console.warn(`[RateLimit] session=${sessionId} 触发限流中止: ${reason}`);
+    options.emitEvent?.({
+      type: 'rate_limit_abort',
+      sessionId,
+      message: `⏹ 已触发限流：${reason}`,
+      reason,
+    });
+    agent.abort();
+  };
+  agent.subscribe((event: any) => {
+    try {
+      if (event.type === 'agent_start') {
+        // 新一轮 run 开始：重置中止标志（abort 只作用于当前 run，计数按会话级保留）
+        rateLimiter.onRunStart();
+      } else if (event.type === 'turn_end') {
+        const stopReason = (event.message as { stopReason?: string } | undefined)?.stopReason;
+        const decision = rateLimiter.onTurnEnd(stopReason);
+        if (!decision.allowed && decision.reason) {
+          rateLimitAborted(decision.reason);
+        }
+      } else if (event.type === 'tool_execution_start') {
+        const decision = rateLimiter.tryRecordToolExecution();
+        if (!decision.allowed && decision.reason) {
+          rateLimitAborted(decision.reason);
+        }
+      }
+    } catch (err) {
+      // 限流判定异常不得影响 Agent 主流程
+      console.error(`[RateLimit] session=${sessionId} handler error:`, err);
+    }
   });
 
   console.log('[AgentFactory] Agent created');

@@ -74,8 +74,11 @@ export const runtimeConfig = {
 export const configRouter = Router();
 
 // GET /api/config
-configRouter.get('/config', (_req: Request, res: Response): void => {
-  const capability = matchCapability(runtimeConfig.model);
+configRouter.get('/config', (req: Request, res: Response): void => {
+  // capability 跟随当前选择的模型：优先用户全局默认模型（前端「模型设置」选中项已同步
+  // POST /api/global-model），无则回落 runtimeConfig.model（env 配置的通用模型）。
+  const gm = getGlobalModel(req.user!.id);
+  const capability = matchCapability(gm?.id || runtimeConfig.model);
   res.json({
     ...runtimeConfig,
     thinking_capability: capability,
@@ -346,17 +349,21 @@ configRouter.get('/global-model', (req: Request, res: Response): void => {
 });
 
 // POST /api/global-model — 保存当前用户的全局默认模型（前端「模型设置」选中时同步调用）
-// body: { id: string; baseUrl: string; apiKey?: string }；id 或 baseUrl 为空 → 400
+// body: { id: string; baseUrl: string; apiKey?: string; thinkingLevel?: string; maxTokens?: number }；id 或 baseUrl 为空 → 400
 configRouter.post('/global-model', (req: Request, res: Response): void => {
-  const body = (req.body ?? {}) as { id?: unknown; baseUrl?: unknown; apiKey?: unknown };
+  const body = (req.body ?? {}) as { id?: unknown; baseUrl?: unknown; apiKey?: unknown; thinkingLevel?: unknown; maxTokens?: unknown };
   const id = typeof body.id === 'string' ? body.id.trim() : '';
   const baseUrl = typeof body.baseUrl === 'string' ? body.baseUrl.trim() : '';
   const apiKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : '';
+  const thinkingLevel = typeof body.thinkingLevel === 'string' && body.thinkingLevel.trim()
+    ? body.thinkingLevel.trim()
+    : undefined;
+  const maxTokens = typeof body.maxTokens === 'number' && body.maxTokens > 0 ? body.maxTokens : undefined;
   if (!id || !baseUrl) {
     res.status(400).json({ error: '模型配置不完整（id 与 baseUrl 不能为空）' });
     return;
   }
-  setGlobalModel(req.user!.id, { id, baseUrl, apiKey });
+  setGlobalModel(req.user!.id, { id, baseUrl, apiKey, thinkingLevel, maxTokens });
   res.json({ success: true, model: getGlobalModel(req.user!.id) });
 });
 

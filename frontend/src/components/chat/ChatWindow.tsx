@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useChatStore } from '../../store/chat-store';
+import { isElectron } from '../../services/api-config';
 import { MessageList } from './MessageList';
 import { QuestionPanel } from './QuestionPanel';
 import { InputBar } from '../input/InputBar';
@@ -106,12 +107,30 @@ export function ChatWindow() {
     setDragType(null);
   }, [dragClearSignal]);
 
+  // Electron 模式：主进程拦截拖放导航后推送目录路径 → 切换工作目录
+  // （渲染进程拿不到拖入目录的路径：File.path 已移除、uri-list 为空、webkitGetAsEntry 对目录返回 null）
+  useEffect(() => {
+    const unsub = window.myagent?.onDropDirectory?.((dir: string) => {
+      console.log('[ChatWindow] 主进程推送的拖放目录:', dir);
+      void switchWorkDir(dir);
+    });
+    return () => {
+      unsub?.();
+    };
+  }, [switchWorkDir]);
+
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (e.dataTransfer.types.includes('Files')) {
       setDragOver(true);
-      setDragType(hasDirectory(e.dataTransfer) ? 'dir' : 'file');
+      if (isElectron()) {
+        // Electron 下 dragOver 时 webkitGetAsEntry 对目录仍返回 null，无法区分目录与普通文件；
+        // 非图片内容统一按"目录"提示（drop 时无论目录还是文件，主进程都会切到目录/文件所在目录）
+        setDragType(getImageFiles(e.dataTransfer).length > 0 ? 'file' : 'dir');
+      } else {
+        setDragType(hasDirectory(e.dataTransfer) ? 'dir' : 'file');
+      }
     }
   }, []);
 
@@ -135,12 +154,22 @@ export function ChatWindow() {
 
   const handleDrop = useCallback(
     async (e: React.DragEvent) => {
+      const dt = e.dataTransfer;
+
+      // Electron 模式：目录拖放时渲染进程拿不到路径（webkitGetAsEntry 返回 null、
+      // uri-list 为空、File.path 已移除），此时不 preventDefault，让 Electron 默认
+      // 导航到 file://<路径>，由主进程 will-navigate 拦截提取路径后推送 drop-directory。
+      // 图片附件仍走下方 preventDefault + addDropFiles 原逻辑。
+      if (isElectron() && !hasDirectory(dt) && getImageFiles(dt).length === 0) {
+        setDragOver(false);
+        setDragType(null);
+        return; // 不阻止默认导航
+      }
+
       e.preventDefault();
       e.stopPropagation();
       setDragOver(false);
       setDragType(null);
-
-      const dt = e.dataTransfer;
 
       // 明确是目录 → 切换工作目录（只在 webkitGetAsEntry 确认时）
       if (hasDirectory(dt)) {
@@ -208,11 +237,12 @@ export function ChatWindow() {
               )}
             </div>
           </div>
+          {/* 操作确认条：贴在输入框上方（与对话区同宽，不延伸到右侧面板下方） */}
+          <ConfirmationDialog />
           <InputBar />
         </div>
         <QuestionPanel />
       </div>
-      <ConfirmationDialog />
       <ExtensionUIDialog />
       <QueueIndicator />
       {/* 魔法飞行动画：subagent 派出时从消息区飞向 Agent 面板 */}

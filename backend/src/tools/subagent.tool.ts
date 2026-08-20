@@ -184,7 +184,8 @@ function createSubagentAgent(opts: CreateSubagentOptions): Agent {
         // Model 上的 apiKey 放进 options。必须把 mdl.apiKey（含 modelOverrides.apiKey）
         // 插入回退链，否则子代理会落到 config.qwenApiKey 或占位 key → 401。
         apiKey: opts?.apiKey || (mdl as { apiKey?: string }).apiKey || config.qwenApiKey || 'sk-no-key-required',
-        maxTokens: opts?.maxTokens ?? config.defaultMaxTokens,
+        // 与 agent-factory 相同的 maxTokens 回退链：opts → mdl.maxTokens（模型预设级）→ 全局默认
+        maxTokens: opts?.maxTokens ?? (mdl as { maxTokens?: number }).maxTokens ?? config.defaultMaxTokens,
         onPayload: (payload: unknown) => {
           const result = onPayload(payload);
           return result ?? payload;

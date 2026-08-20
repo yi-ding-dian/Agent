@@ -52,6 +52,9 @@ export class AgentSessionService {
   private agent: Agent;
   private destroyed = false;
 
+  /** 模型预设级思考模式（undefined = 跟随全局 thinking_level；applyModelOverrides 重建时用于比较） */
+  readonly thinkingLevel?: string;
+
   constructor(
     sessionId: string,
     systemPrompt: string,
@@ -59,12 +62,14 @@ export class AgentSessionService {
     model: Model<any>,
     tools: AgentTool<any>[],
     initialMessages?: { role: string; content: string }[],
+    thinkingLevel?: string,
   ) {
     // erasableSyntaxOnly：不直接用构造函数参数属性，显式赋值
     this.sessionId = sessionId;
     this.mode = mode;
     this.systemPrompt = systemPrompt;
-    console.log(`[AgentSession] Creating session ${sessionId} mode=${mode} initialMsgs=${initialMessages?.length ?? 0}`);
+    this.thinkingLevel = thinkingLevel;
+    console.log(`[AgentSession] Creating session ${sessionId} mode=${mode} thinkingLevel=${thinkingLevel ?? '(跟随全局)'} initialMsgs=${initialMessages?.length ?? 0}`);
 
     const emitEvent = (event: ClientEvent) => {
       if (!this.destroyed) {
@@ -79,6 +84,7 @@ export class AgentSessionService {
       sessionId,
       emitEvent,
       initialMessages,
+      thinkingLevel,
     });
 
     // 注意：pi-agent-core 的 subscribe 会按注册顺序 await listener（含本回调的 await 点），

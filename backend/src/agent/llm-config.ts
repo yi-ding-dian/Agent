@@ -5,6 +5,10 @@ export interface ModelOverrides {
   id?: string;
   baseUrl?: string;
   apiKey?: string;
+  /** 模型预设级思考模式（'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'）；undefined = 跟随全局 thinking_level */
+  thinkingLevel?: string;
+  /** 最大输出 token 数（模型预设级，添加模型时设置；未传回落全局默认 config.defaultMaxTokens） */
+  maxTokens?: number;
 }
 
 /**
@@ -46,7 +50,8 @@ export function createQwenModel(overrides?: ModelOverrides): Model<'openai-compl
     reasoning: true,
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 131072,
-    maxTokens: config.defaultMaxTokens,
+    // 模型预设级 maxTokens 优先（来自 modelOverrides.maxTokens），未设回落全局默认
+    maxTokens: overrides?.maxTokens ?? config.defaultMaxTokens,
     headers: {},
     compat: {
       maxTokensField: 'max_tokens',

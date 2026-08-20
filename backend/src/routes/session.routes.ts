@@ -54,7 +54,7 @@ sessionRouter.post('/sessions', (req: Request, res: Response): void => {
     name?: string;
     mode?: 'chat' | 'agent';
     systemPrompt?: string;
-    modelOverrides?: { id?: string; baseUrl?: string; apiKey?: string };
+    modelOverrides?: { id?: string; baseUrl?: string; apiKey?: string; thinkingLevel?: string };
   };
   const mgr = getSessionManager();
   // 透传 modelOverrides：新会话创建时即应用前端当前选中的默认模型配置。

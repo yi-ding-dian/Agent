@@ -17,6 +17,10 @@ export interface GlobalModelConfig {
   id: string;
   baseUrl: string;
   apiKey: string;
+  /** 模型预设级思考模式；undefined = 跟随全局 thinking_level（老数据兼容） */
+  thinkingLevel?: string;
+  /** 最大输出 token 数（模型预设级，保存/读取透传；老数据无该字段兼容，undefined = 回落全局默认） */
+  maxTokens?: number;
 }
 
 /** userId → 全局默认模型 */
@@ -37,8 +41,14 @@ function sanitize(raw: unknown): GlobalModelMap {
       const id = typeof e.id === 'string' ? e.id.trim() : '';
       const baseUrl = typeof e.baseUrl === 'string' ? e.baseUrl.trim() : '';
       const apiKey = typeof e.apiKey === 'string' ? e.apiKey.trim() : '';
+      // thinkingLevel 可选：老数据没有时保持 undefined（= 跟随全局）
+      const thinkingLevel = typeof e.thinkingLevel === 'string' && e.thinkingLevel.trim()
+        ? e.thinkingLevel.trim()
+        : undefined;
+      // maxTokens 可选：老数据没有时保持 undefined（= 回落全局默认）
+      const maxTokens = typeof e.maxTokens === 'number' && e.maxTokens > 0 ? e.maxTokens : undefined;
       // 无效条目（id/baseUrl 不完整）直接丢弃：不能以残缺配置充当"默认模型"
-      if (id && baseUrl) out[userId] = { id, baseUrl, apiKey };
+      if (id && baseUrl) out[userId] = { id, baseUrl, apiKey, thinkingLevel, maxTokens };
     }
   }
   return out;
@@ -93,6 +103,12 @@ export function setGlobalModel(userId: number, model: GlobalModelConfig): void {
     throw new Error('模型配置不完整（id 与 baseUrl 不能为空）');
   }
   const map = load();
-  map[String(userId)] = { id, baseUrl, apiKey };
+  // thinkingLevel 允许为空（undefined = 跟随全局），trim 后为空视为未设置
+  const thinkingLevel = typeof model.thinkingLevel === 'string' && model.thinkingLevel.trim()
+    ? model.thinkingLevel.trim()
+    : undefined;
+  // maxTokens 允许为空（undefined = 回落全局默认），非法值丢弃
+  const maxTokens = typeof model.maxTokens === 'number' && model.maxTokens > 0 ? model.maxTokens : undefined;
+  map[String(userId)] = { id, baseUrl, apiKey, thinkingLevel, maxTokens };
   saveToFile(map);
 }

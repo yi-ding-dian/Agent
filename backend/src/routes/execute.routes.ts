@@ -19,7 +19,7 @@ executeRouter.post('/execute', async (req: Request, res: Response): Promise<void
   const { instruction, sessionId, modelOverrides } = req.body as {
     instruction?: string;
     sessionId?: string;
-    modelOverrides?: { id?: string; baseUrl?: string; apiKey?: string };
+    modelOverrides?: { id?: string; baseUrl?: string; apiKey?: string; thinkingLevel?: string; maxTokens?: number };
   };
 
   if (!instruction || typeof instruction !== 'string') {

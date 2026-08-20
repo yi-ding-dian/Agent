@@ -45,6 +45,11 @@ function resolveSessionModel(userId: number, overrides?: ModelOverrides): ModelO
     id: overrides?.id || global?.id,
     baseUrl: overrides?.baseUrl || global?.baseUrl,
     apiKey: overrides?.apiKey || global?.apiKey,
+    // maxTokens：模型预设级（overrides）优先，未设回落全局默认（global.maxTokens，可能 undefined → createQwenModel 兜底 65535）
+    maxTokens: overrides?.maxTokens ?? global?.maxTokens,
+    // thinkingLevel：模型预设级（overrides）优先，未设回落全局默认（global.thinkingLevel）；
+    // 两者都无则 undefined → agent-factory 回落全局 config.thinkingLevel（跟随全局）
+    thinkingLevel: overrides?.thinkingLevel || global?.thinkingLevel,
   };
 }
 
@@ -74,7 +79,7 @@ export class SessionManager {
     systemPrompt?: string,
     name?: string,
     initialMessages?: { role: string; content: string }[],
-    modelOverrides?: { id?: string; baseUrl?: string; apiKey?: string },
+    modelOverrides?: ModelOverrides,
     forceId?: string,
   ): string {
     const id = forceId || generateId();
@@ -123,6 +128,7 @@ export class SessionManager {
       model,
       tools,
       initialMessages,
+      modelCfg.thinkingLevel,
     );
     this.sessions.set(id, {
       id,
@@ -194,11 +200,12 @@ export class SessionManager {
    */
   applyModelOverrides(
     sessionId: string,
-    overrides?: { id?: string; baseUrl?: string; apiKey?: string },
+    overrides?: ModelOverrides,
   ): boolean {
     if (
       !overrides ||
-      (overrides.id === undefined && overrides.baseUrl === undefined && overrides.apiKey === undefined)
+      (overrides.id === undefined && overrides.baseUrl === undefined && overrides.apiKey === undefined &&
+        overrides.maxTokens === undefined && overrides.thinkingLevel === undefined)
     ) {
       return false;
     }
@@ -210,17 +217,26 @@ export class SessionManager {
       return false;
     }
 
-    const current = entry.service.model as { id: string; baseUrl: string; apiKey?: string };
+    const current = entry.service.model as { id: string; baseUrl: string; apiKey?: string; maxTokens?: number };
     const targetId = overrides.id ?? current.id;
     const targetBaseUrl = overrides.baseUrl ?? current.baseUrl;
     const targetApiKey = overrides.apiKey ?? current.apiKey;
+    const targetMaxTokens = overrides.maxTokens ?? current.maxTokens;
+    // thinkingLevel：overrides 优先，未设回落会话当前值（会话创建/上次重建时已解析 overrides→全局 链）
+    const targetThinkingLevel = overrides.thinkingLevel ?? entry.service.thinkingLevel;
 
-    // 防抖：目标模型与当前模型完全一致时不重建
-    if (current.id === targetId && current.baseUrl === targetBaseUrl && current.apiKey === targetApiKey) {
+    // 防抖：目标模型与当前模型完全一致时不重建（maxTokens/thinkingLevel 变化也触发重建）
+    if (
+      current.id === targetId &&
+      current.baseUrl === targetBaseUrl &&
+      current.apiKey === targetApiKey &&
+      current.maxTokens === targetMaxTokens &&
+      entry.service.thinkingLevel === targetThinkingLevel
+    ) {
       return false;
     }
 
-    console.log(`[SessionManager] Rebuilding session ${sessionId} model=${targetId} (was ${current.id})`);
+    console.log(`[SessionManager] Rebuilding session ${sessionId} model=${targetId} (was ${current.id}) thinkingLevel=${targetThinkingLevel ?? '(跟随全局)'}`);
 
     // 保留现有消息历史：原样引用（AgentMessage 含 usage/stopReason/toolResult 等结构化字段，
     // 必须经 replaceMessages 原样继承；不能走构造函数 initialMessages 路径——createAgent 会经
@@ -231,6 +247,7 @@ export class SessionManager {
       id: targetId,
       baseUrl: targetBaseUrl,
       apiKey: targetApiKey,
+      maxTokens: targetMaxTokens,
     });
     const service = new AgentSessionService(
       entry.id,
@@ -238,6 +255,8 @@ export class SessionManager {
       entry.metadata.mode,
       model,
       this.buildTools(entry.metadata.mode, model),
+      undefined,
+      targetThinkingLevel,
     );
     service.replaceMessages(existingMessages);
 

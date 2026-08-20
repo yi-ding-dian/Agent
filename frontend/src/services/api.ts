@@ -20,7 +20,7 @@ export async function listSessions() {
 export async function createSession(
   name?: string,
   mode?: string,
-  llmOverrides?: { id?: string; baseUrl?: string; apiKey?: string },
+  llmOverrides?: { id?: string; baseUrl?: string; apiKey?: string; thinkingLevel?: string },
 ) {
   const res = await fetch(apiUrl('/api/sessions'), {
     method: 'POST',
@@ -45,14 +45,14 @@ export async function createSession(
 }
 
 /** 获取当前用户的全局默认模型（未设置时返回空对象） */
-export async function getGlobalModel(): Promise<{ id?: string; baseUrl?: string; apiKey?: string }> {
+export async function getGlobalModel(): Promise<{ id?: string; baseUrl?: string; apiKey?: string; maxTokens?: number; thinkingLevel?: string }> {
   const res = await fetch(apiUrl('/api/global-model'), { headers: authHeaders() });
   if (!res.ok) return {};
   return res.json();
 }
 
 /** 保存当前用户的全局默认模型（前端「模型设置」选中预设 / 手动配置时同步调用） */
-export async function saveGlobalModel(model: { id: string; baseUrl: string; apiKey?: string }): Promise<void> {
+export async function saveGlobalModel(model: { id: string; baseUrl: string; apiKey?: string; maxTokens?: number; thinkingLevel?: string }): Promise<void> {
   const res = await fetch(apiUrl('/api/global-model'), {
     method: 'POST',
     headers: authHeaders(),

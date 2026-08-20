@@ -77,7 +77,7 @@ async function main() {
     const message = msg.message as string;
     const sessionId = msg.sessionId as string | undefined;
     const mode = (msg.mode as 'chat' | 'agent') || 'chat';
-    const modelOverrides = msg.modelOverrides as { id?: string; baseUrl?: string; apiKey?: string } | undefined;
+    const modelOverrides = msg.modelOverrides as { id?: string; baseUrl?: string; apiKey?: string; maxTokens?: number } | undefined;
     const rebuild = msg.rebuild as boolean | undefined;
     let history = msg.history as { role: string; content: string }[] | undefined;
     const images = msg.images as { type: string; data: string; mimeType: string }[] | undefined;

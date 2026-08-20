@@ -4,6 +4,7 @@ import { getSessionManager } from '../services/session-manager.js';
 import { getTokenUsage, compactMessages } from '../services/token-tracker.js';
 import { getGlobalModel } from '../config/global-model-config.js';
 import { createQwenModel } from '../agent/llm-config.js';
+import { config } from '../config.js';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 export const tokenRouter = Router();
@@ -72,7 +73,24 @@ tokenRouter.get('/sessions/:id/tokens', (req: Request, res: Response): void => {
     return;
   }
 
-  res.json(getTokenUsage(messages));
+  const usage = getTokenUsage(messages);
+  // 分母用会话模型的实际 maxTokens（模型预设配置），而非全局默认 65535：
+  // 内存会话取 session.model.maxTokens；DB-only 会话用该用户全局默认模型的 maxTokens，无则回落默认。
+  let modelMaxTokens = config.defaultMaxTokens;
+  const memSession = mgr.getSession(sessionId);
+  if (memSession && (memSession as any).model?.maxTokens) {
+    modelMaxTokens = (memSession as any).model.maxTokens;
+  } else {
+    const global = getGlobalModel(userId);
+    if (global?.id) {
+      try {
+        modelMaxTokens = createQwenModel(global).maxTokens ?? config.defaultMaxTokens;
+      } catch {
+        modelMaxTokens = config.defaultMaxTokens;
+      }
+    }
+  }
+  res.json({ ...usage, maxTokens: modelMaxTokens });
 });
 
 /** 手动触发压缩（支持 DB-only 持久化会话） */

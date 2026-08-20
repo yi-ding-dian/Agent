@@ -22,7 +22,7 @@ export type SSEEvent =
   // 新增：速率限制警告
   | { type: 'rate_limit_warning'; message: string; remaining: number; resetIn: number }
   // 新增：限流终止 agent（连续错误超限）
-  | { type: 'rate_limit_abort'; message: string }
+  | { type: 'rate_limit_abort'; message: string; reason?: string }
   // 新增：LLM 超时
   | { type: 'llm_timeout'; message: string }
   // 新增：自动上下文压缩

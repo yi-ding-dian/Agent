@@ -223,6 +223,10 @@ export class AgentEngine {
       id: opts.modelOverrides?.id || cfg.id,
       baseUrl: opts.modelOverrides?.baseUrl || cfg.baseUrl,
       apiKey: opts.modelOverrides?.apiKey || cfg.apiKey,
+      // 模型预设级思考模式（undefined = 跟随全局 config.thinkingLevel，由 agent-factory 回落）
+      thinkingLevel: opts.modelOverrides?.thinkingLevel,
+      // maxTokens：模型预设级（Electron 客户端传入）优先，未设回落全局默认（applyConfig 已写入 config.defaultMaxTokens）
+      maxTokens: opts.modelOverrides?.maxTokens ?? config.defaultMaxTokens,
     };
 
     if (opts.mode === 'agent') {
@@ -250,6 +254,7 @@ export class AgentEngine {
       model,
       tools,
       opts.initialMessages,
+      modelCfg.thinkingLevel,
     );
 
     // 转发会话事件到引擎广播

@@ -43,8 +43,9 @@ export interface RuntimeThinkingConfig {
 
 // ── 模型登记表（按 ID 前缀匹配）──
 
+// 注意：levels 数组不再包含 off 档 —— "关闭"统一由「开启思考」开关（enable_thinking）控制，
+// 滑杆只负责强度等级。旧数据 thinking_level='off' 由兼容逻辑归一化/关闭处理。
 const LEVELS_FULL: ThinkingLevelItem[] = [
-  { value: 'off', label: '关闭' },
   { value: 'minimal', label: '极少' },
   { value: 'low', label: '低' },
   { value: 'medium', label: '中等' },
@@ -68,29 +69,26 @@ const CAPABILITIES: Array<{ match: RegExp; capability: ThinkingCapability }> = [
       },
     },
   },
-  // DeepSeek V4 — 多级（high + max）
+  // DeepSeek V4 — 官方三级（low / high / max）。off 已移出档位，关闭由「开启思考」开关控制
   {
     match: /deepseek/i,
     capability: {
       mode: 'levels',
       label: '推理深度',
       levels: [
-        { value: 'off', label: '关闭' },
         { value: 'low', label: '低' },
-        { value: 'medium', label: '中等' },
         { value: 'high', label: '高' },
         { value: 'max', label: '最高' },
       ],
     },
   },
-  // Grok 4+ — 多级
+  // Grok 4+ — 多级（off 由「开启思考」开关控制）
   {
     match: /grok/i,
     capability: {
       mode: 'levels',
       label: '推理深度',
       levels: [
-        { value: 'off', label: '关闭' },
         { value: 'low', label: '低' },
         { value: 'medium', label: '中等' },
         { value: 'high', label: '高' },
@@ -115,14 +113,13 @@ const CAPABILITIES: Array<{ match: RegExp; capability: ThinkingCapability }> = [
       levels: LEVELS_FULL,
     },
   },
-  // Gemini 3+ — 多级
+  // Gemini 3+ — 多级（off 由「开启思考」开关控制）
   {
     match: /gemini/i,
     capability: {
       mode: 'levels',
       label: '思考级别',
       levels: [
-        { value: 'off', label: '关闭' },
         { value: 'minimal', label: '极少' },
         { value: 'low', label: '低' },
         { value: 'medium', label: '中等' },
@@ -147,18 +144,22 @@ export function matchCapability(modelId: string): ThinkingCapability {
   return NONE_CAPABILITY;
 }
 
-/** 获取当前运行时配置 */
-export function getRuntimeThinkingConfig(): RuntimeThinkingConfig {
+/**
+ * 获取当前运行时配置。
+ * @param thinkingLevelOverride 模型预设级思考模式（undefined = 跟随全局 config.thinkingLevel）
+ */
+export function getRuntimeThinkingConfig(thinkingLevelOverride?: string): RuntimeThinkingConfig {
   return {
-    thinkingLevel: (config as any).thinkingLevel || 'medium',
+    // 模型预设级优先，未设则跟随全局；全局缺省为 'high'（默认思考强度：高）
+    thinkingLevel: thinkingLevelOverride || (config as any).thinkingLevel || 'high',
     enableThinking: (config as any).enableThinking ?? true,
     thinkingBudget: (config as any).thinkingBudget || 1024,
     preserveThinking: (config as any).preserveThinking ?? false,
   };
 }
 
-/** 构建模型的 compat 配置 */
-export function buildThinkingCompat(modelId: string): Record<string, unknown> {
+/** 构建模型的 compat 配置（thinkingLevel 参数保留：模型预设级思考模式传入，供各能力组装使用） */
+export function buildThinkingCompat(modelId: string, _thinkingLevel?: string): Record<string, unknown> {
   const cap = matchCapability(modelId);
   const compat: Record<string, unknown> = {};
   if (cap.thinkingFormat) {
@@ -167,8 +168,11 @@ export function buildThinkingCompat(modelId: string): Record<string, unknown> {
   return compat;
 }
 
-/** 构建 onPayload 回调，注入模型特定思考参数 */
-export function buildOnPayload(modelId: string): (payload: unknown) => unknown {
+/**
+ * 构建 onPayload 回调，注入模型特定思考参数。
+ * @param thinkingLevel 模型预设级思考模式（undefined = 跟随全局）
+ */
+export function buildOnPayload(modelId: string, thinkingLevel?: string): (payload: unknown) => unknown {
   const cap = matchCapability(modelId);
 
   return (payload: unknown) => {
@@ -177,16 +181,43 @@ export function buildOnPayload(modelId: string): (payload: unknown) => unknown {
 
     if (cap.mode === 'switch') {
       // 每次请求时动态读取最新配置，确保关闭思考后立即生效
-      const cfg = getRuntimeThinkingConfig();
-      p.enable_thinking = cfg.enableThinking;
-      if (cfg.enableThinking && cfg.thinkingBudget > 0 && cap.switchConfig?.supportsBudget) {
+      const cfg = getRuntimeThinkingConfig(thinkingLevel);
+      // 模型预设级 thinkingLevel='off' 时强制关闭思考（与全局滑杆 off 语义一致）
+      const enabled = cfg.thinkingLevel !== 'off' && cfg.enableThinking;
+      p.enable_thinking = enabled;
+      if (enabled && cfg.thinkingBudget > 0 && cap.switchConfig?.supportsBudget) {
         p.thinking_budget = cfg.thinkingBudget;
       }
       if (cfg.preserveThinking && cap.switchConfig?.supportsPreserve) {
         p.preserve_thinking = true;
       }
     }
-    // levels 模式：pi-mono 已通过 reasoning_effort 处理，无需额外注入
+    if (cap.mode === 'levels' && /deepseek/i.test(modelId)) {
+      // DeepSeek V4 思考参数规范（官方）：
+      //   thinking.type: 'enabled' | 'disabled'（开关，放请求体）
+      //   reasoning_effort: 'low' | 'high' | 'max'（开启思考时的思考深度）
+      // 映射自 thinkingLevel：minimal/low→low；medium→high（日常）；high/xhigh→high；max→max
+      // 关闭由 enableThinking 开关统一控制；`level !== 'off'` 仅为兼容旧配置 thinking_level='off' 的残留值
+      const cfg = getRuntimeThinkingConfig(thinkingLevel);
+      const level = cfg.thinkingLevel;
+      const enabled = level !== 'off' && cfg.enableThinking;
+      p.thinking = { type: enabled ? 'enabled' : 'disabled' };
+      if (enabled) {
+        const effortMap: Record<string, string> = {
+          minimal: 'low',
+          low: 'low',
+          medium: 'high',
+          high: 'high',
+          xhigh: 'max',
+          max: 'max',
+        };
+        p.reasoning_effort = effortMap[level] || 'high';
+      } else {
+        delete p.reasoning_effort;
+      }
+      return payload;
+    }
+    // 其他 levels 模式：pi-mono 已通过 reasoning_effort 处理，无需额外注入
     return payload;
   };
 }

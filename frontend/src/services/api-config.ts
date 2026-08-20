@@ -76,6 +76,13 @@ export interface ModelPreset {
   apiKey: string;
   /** API 格式：默认 openai-completions，anthropic 预留 */
   apiFormat?: 'openai-completions' | 'anthropic';
+  /** 最大输出 token 数（添加模型时设置；缺省按 65535，与后端 config.defaultMaxTokens 兜底一致） */
+  maxTokens?: number;
+  /**
+   * 模型级思考模式（已废弃，仅兼容旧 localStorage 数据保留字段，不再读写/使用）：
+   * 思考模式统一在「常规」设置按当前模型能力配置，模型设置不再提供该选项。
+   */
+  thinkingLevel?: string;
 }
 
 const PRESETS_KEY = 'myagent_llm_presets';
@@ -131,14 +138,19 @@ export function getActiveModelPreset(): ModelPreset | undefined {
 /**
  * 从 localStorage 读取自定义 LLM 覆盖配置。
  * 优先级：选中了模型预设 → 使用该预设的配置；否则使用三个独立手动 key（兼容旧行为）。
+ * maxTokens：仅预设分支携带（预设未设置时给 65535 默认，与后端 config.defaultMaxTokens 一致）；
+ * 手动三 key 分支不传（undefined）→ 后端回落全局默认，行为不变。
+ * 注意：不再携带 thinkingLevel —— 思考模式已统一在「常规」设置按当前模型能力配置，
+ * 模型预设不参与思考强度（后端全局默认模型即使存有旧 thinkingLevel 字段也忽略）。
  */
-export function getLlmOverrides(): { id?: string; baseUrl?: string; apiKey?: string } {
+export function getLlmOverrides(): { id?: string; baseUrl?: string; apiKey?: string; maxTokens?: number } {
   const preset = getActiveModelPreset();
   if (preset) {
     return {
       id: preset.model?.trim() || undefined,
       baseUrl: preset.baseUrl?.trim() || undefined,
       apiKey: preset.apiKey?.trim() || undefined,
+      maxTokens: preset.maxTokens ?? 65535,
     };
   }
   const id = localStorage.getItem(LLM_KEYS.model) || undefined;
@@ -149,7 +161,7 @@ export function getLlmOverrides(): { id?: string; baseUrl?: string; apiKey?: str
 }
 
 /** 保存自定义 LLM 覆盖配置 */
-export function saveLlmOverrides(overrides: { id?: string; baseUrl?: string; apiKey?: string }): void {
+export function saveLlmOverrides(overrides: { id?: string; baseUrl?: string; apiKey?: string; maxTokens?: number }): void {
   if (overrides.id) localStorage.setItem(LLM_KEYS.model, overrides.id);
   else localStorage.removeItem(LLM_KEYS.model);
   if (overrides.baseUrl) localStorage.setItem(LLM_KEYS.baseUrl, overrides.baseUrl);

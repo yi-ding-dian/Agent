@@ -145,8 +145,10 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     model: '',
     system_prompt: '你是一个智能助手，可以帮助用户解决各种问题。',
     temperature: 0.7,
-    max_tokens: 2000,
-    thinking_level: 'medium',
+    // maxTokens 已移至「模型设置」（按模型预设生效）。此处固定 65535 与后端
+    // config.defaultMaxTokens 兜底一致，避免常规设置保存时误覆盖后端全局默认。
+    max_tokens: 65535,
+    thinking_level: 'high',
     enable_thinking: true,
     thinking_budget: 1024,
     preserve_thinking: false,
@@ -192,9 +194,11 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   // 全局默认模型 —— 后端创建会话时 modelOverrides 与全局默认都无才报错）
   const [presets, setPresets] = useState<ModelPreset[]>(() => getModelPresets());
   const [activePreset, setActivePreset] = useState<string | null>(() => getActivePresetName());
-  const [editingPreset, setEditingPreset] = useState<{ index: number | 'new'; name: string; baseUrl: string; model: string; apiKey: string } | null>(null);
+  const [editingPreset, setEditingPreset] = useState<{ index: number | 'new'; name: string; baseUrl: string; model: string; apiKey: string; maxTokens: number } | null>(null);
   const [avatar, setAvatar] = useState<string>(() => localStorage.getItem('myagent_avatar') || '');
   const user = useAuthStore((s) => s.user);
+  // 服务端全局默认模型（模型设置选中项同步而来；常规 tab「当前模型」展示用）
+  const [globalModel, setGlobalModel] = useState<{ id: string; baseUrl: string; apiKey: string } | null>(null);
 
   const RATE_FIELDS: Record<string, { min: number; max: number; def: number; label: string }> = {
     tool_rate_limit_per_minute: { min: 10, max: 50, def: 50, label: '每分钟最多工具调用' },
@@ -216,6 +220,20 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
       setForm((prev) => ({ ...prev, ...config }));
     }
   }, [config]);
+
+  // 当前模型能力（levels）变化时，若 form.thinking_level 不在其级别列表（切换模型残留旧级别，
+  // 或旧配置遗留 'off'）→ 归一化到模型默认级别（优先 high，回退首档），保证保存值始终合法
+  // （滑杆渲染另有 effectiveThinkingLevel 兜底）
+  useEffect(() => {
+    const cap = form.thinking_capability;
+    const levels = cap?.mode === 'levels' ? (cap.levels || []) : [];
+    if (!levels.length || levels.some((l) => l.value === form.thinking_level)) return;
+    setForm((prev) => ({
+      ...prev,
+      thinking_level: levels.find((l) => l.value === 'high')?.value || levels[0]?.value || 'high',
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.thinking_capability, form.thinking_level]);
 
   // 切换到记忆管理 tab 时加载当前记忆全文
   useEffect(() => {
@@ -311,8 +329,10 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     setActivePreset(name);
     // 同步保存该预设为该用户的全局默认模型（后端创建会话时无 overrides 则使用它）。
     // 失败静默：不影响本地选中，本地选中本身已随请求经 modelOverrides 生效。
+    // 注：不再携带 thinkingLevel —— 思考强度统一在「常规」设置按当前模型能力配置。
     if (preset) {
-      api.saveGlobalModel({ id: preset.model, baseUrl: preset.baseUrl, apiKey: preset.apiKey })
+      api.saveGlobalModel({ id: preset.model, baseUrl: preset.baseUrl, apiKey: preset.apiKey, maxTokens: preset.maxTokens ?? 65535 })
+        .then(() => setGlobalModel({ id: preset.model, baseUrl: preset.baseUrl, apiKey: preset.apiKey }))
         .catch(() => {});
     }
   };
@@ -320,12 +340,15 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   // 打开设置时恢复服务端全局默认：本地无选中预设且后端有全局默认 → 恢复选中。
   // 后端为权威来源（服务端会话不带 modelOverrides 时使用它）；若该模型不在预设列表，
   // 自动补一个临时预设显示并选中（写入 localStorage presets），保证本地与后端一致。
-  // 同时兼容旧版本：localStorage 手动配置（三个 key）且未选中预设 → 一并同步到服务端。
+  // 同时记录全局默认模型（常规 tab「当前模型」展示用，本地已有选中时仅记录不覆盖），
+  // 并兼容旧版本：localStorage 手动配置（三个 key）且未选中预设 → 一并同步到服务端。
   useEffect(() => {
-    if (getActivePresetName()) return;
     api.getGlobalModel()
       .then((gm) => {
         if (!gm?.id || !gm?.baseUrl) return;
+        setGlobalModel({ id: gm.id, baseUrl: gm.baseUrl, apiKey: gm.apiKey || '' });
+        // 本地已有选中预设 → 不覆盖（该选中项此前已同步过服务端，后端全局默认即此项）
+        if (getActivePresetName()) return;
         const match = presets.find((p) => p.model === gm.id && p.baseUrl === gm.baseUrl);
         if (match) {
           setActivePresetName(match.name);
@@ -339,6 +362,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
           model: gm.id,
           apiKey: gm.apiKey || '',
           apiFormat: 'openai-completions',
+          maxTokens: gm.maxTokens ?? 65535,
         };
         setPresets((prev) => {
           const next = [...prev, tmp];
@@ -359,13 +383,13 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   }, []);
 
   const handleStartAddPreset = () => {
-    setEditingPreset({ index: 'new', name: '', baseUrl: '', model: '', apiKey: '' });
+    setEditingPreset({ index: 'new', name: '', baseUrl: '', model: '', apiKey: '', maxTokens: 65535 });
   };
 
   const handleStartEditPreset = (index: number) => {
     const p = presets[index];
     if (!p) return;
-    setEditingPreset({ index, name: p.name, baseUrl: p.baseUrl, model: p.model, apiKey: p.apiKey });
+    setEditingPreset({ index, name: p.name, baseUrl: p.baseUrl, model: p.model, apiKey: p.apiKey, maxTokens: p.maxTokens ?? 65535 });
   };
 
   const handleSavePreset = () => {
@@ -382,9 +406,11 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
       return;
     }
     const apiKey = editingPreset.apiKey.trim();
+    // maxTokens 无输入时默认 65535（与后端 config.defaultMaxTokens 兜底一致）
+    const maxTokens = editingPreset.maxTokens || 65535;
     const next = editingPreset.index === 'new'
-      ? [...presets, { name, baseUrl, model, apiKey, apiFormat: 'openai-completions' as const }]
-      : presets.map((p, i) => (i === editingPreset.index ? { ...p, name, baseUrl, model, apiKey } : p));
+      ? [...presets, { name, baseUrl, model, apiKey, maxTokens, apiFormat: 'openai-completions' as const }]
+      : presets.map((p, i) => (i === editingPreset.index ? { ...p, name, baseUrl, model, apiKey, maxTokens } : p));
     setPresets(next);
     saveModelPresets(next);
     // 编辑的是当前选中项且名称被修改 → 同步选中名称
@@ -602,6 +628,53 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     }
   };
 
+  // ─── 思考模式（常规 tab）：当前模型 + 开启开关 + 按模型能力动态级别 ───
+
+  const thinkingCap = form.thinking_capability;
+  const capLevels = thinkingCap?.mode === 'levels' ? (thinkingCap.levels || []) : [];
+  // thinking_level 归一化：不在当前模型级别中（如切换模型后残留旧级别 minimal/xhigh/max，
+  // 或旧配置遗留 'off'）→ 映射模型默认级别（优先 high，回退首档），避免滑杆落空/级别错位；
+  // 滑杆档位永远不含「关闭」（关闭由「开启思考」开关控制）
+  const effectiveThinkingLevel = capLevels.some((l) => l.value === form.thinking_level)
+    ? form.thinking_level
+    : (capLevels.find((l) => l.value === 'high')?.value || capLevels[0]?.value || 'high');
+  const thinkingSliderIndex = capLevels.length ? Math.max(0, capLevels.findIndex((l) => l.value === effectiveThinkingLevel)) : 0;
+  const thinkingLevelLabel = capLevels.find((l) => l.value === effectiveThinkingLevel)?.label || effectiveThinkingLevel;
+
+  // 当前模型显示：模型设置选中的预设名 → 服务端全局默认模型 id → 未配置提示
+  const currentModelLabel = (() => {
+    if (activePreset) {
+      const p = presets.find((x) => x.name === activePreset);
+      if (p) return p.name;
+    }
+    if (globalModel?.id) return globalModel.id;
+    return '未配置（请到模型设置选择）';
+  })();
+
+  /**
+   * 「开启思考」总开关（绑定 form.enable_thinking，三种能力模式均显示）：
+   * - levels 模式：关闭 = enable_thinking=false（thinking_level 保留原值不置 off —— 后端以
+   *   enableThinking 为权威关闭信号，且 levels 档位已无 off；旧配置残留 'off' 无害，开启时会归一化）
+   * - switch 模式（Qwen）：enable_thinking 即开关
+   * - none 模式：仅开关生效（模型无强度等级），开启/关闭不动 thinking_level
+   * - 关闭开关时隐藏强度滑杆 / budget 输入（滑杆不会显示「关闭」档）
+   */
+  const handleThinkingToggle = (checked: boolean) => {
+    if (!checked) {
+      setForm((prev) => ({ ...prev, enable_thinking: false }));
+      return;
+    }
+    setForm((prev) => {
+      // 仅 levels 模式需要归一化级别；switch/none 模式保持原值。
+      // 开启时若原级别为 off（旧配置残留）或不在当前模型级别中 → 归一到模型默认级别（优先 high）
+      const level =
+        capLevels.length > 0 && (prev.thinking_level === 'off' || !capLevels.some((l) => l.value === prev.thinking_level))
+          ? (capLevels.find((l) => l.value === 'high')?.value || capLevels[0]?.value || 'high')
+          : prev.thinking_level;
+      return { ...prev, enable_thinking: true, thinking_level: level };
+    });
+  };
+
   const handleOverlayClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
       onClose();
@@ -691,7 +764,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   value={form.system_prompt}
                   onChange={(e) => handleChange('system_prompt', e.target.value)}
                   placeholder="系统提示词"
-                  rows={3}
+                  rows={2}
                 />
               </div>
               <div className="form-group">
@@ -727,17 +800,9 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     onChange={(e) => handleChange('temperature', parseFloat(e.target.value))}
                   />
                 </div>
-                <div className="form-group">
-                  <label>Max Tokens</label>
-                  <input
-                    type="number"
-                    value={form.max_tokens}
-                    onChange={(e) => handleChange('max_tokens', parseInt(e.target.value) || 2000)}
-                    min={100}
-                    max={128000}
-                    step={100}
-                  />
-                </div>
+                {/* maxTokens 已移至「模型设置」：添加模型时按模型预设设置，随 modelOverrides 生效。
+                    此处不再展示输入框；form.max_tokens 保留仅作向后兼容（值固定 65535 与后端
+                    config.defaultMaxTokens 兜底一致，保存时不改变后端兜底值） */}
               </div>
               <div className="form-group">
                 <label>LLM 超时时间（秒） — 当前 {Math.round(form.llm_timeout_ms / 1000)}s</label>
@@ -756,26 +821,50 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   <span>600s</span>
                 </div>
               </div>
-              <div className={`form-group thinking-slider-group${form.thinking_level === 'xhigh' ? ' fire-active' : ''}`}>
-                {form.thinking_capability?.mode === 'levels' ? (
+
+              {/* 思考模式区块（当前模型 / 开启思考开关 / 按能力动态的强度滑杆），固定在常规 tab 最下面 */}
+              <div className={`form-group thinking-slider-group${effectiveThinkingLevel === 'xhigh' ? ' fire-active' : ''}`}>
+                {/* 当前模型（模型设置选中预设 → 服务端全局默认 → 未配置提示） */}
+                <div className="current-model-row">
+                  <span className="current-model-label">当前模型</span>
+                  <span className="current-model-value">{currentModelLabel}</span>
+                </div>
+                {/* 「开启思考」总开关（三种能力模式均显示）：
+                    levels 关闭 = enable_thinking=false（levels 档位无 off，关闭由开关统一控制，
+                    旧配置 thinking_level='off' 残留由 handleThinkingToggle/归一化处理）；
+                    switch（Qwen）enable_thinking 即开关；none 无强度设置，仅开关生效 */}
+                <div className="thinking-switch-row">
+                  <label className="toggle-switch">
+                    <input
+                      type="checkbox"
+                      checked={form.enable_thinking}
+                      onChange={(e) => handleThinkingToggle(e.target.checked)}
+                    />
+                    <span className="toggle-slider" />
+                  </label>
+                  <span className="thinking-switch-label">
+                    {form.enable_thinking ? '思考已开启（模型会先思考再回答）' : '思考已关闭（模型直接回答）'}
+                  </span>
+                </div>
+                {/* levels 模式：按当前模型能力动态渲染级别（DeepSeek: 低/高/最高；GPT-5/Claude: 5 级，无「关闭」档） */}
+                {form.enable_thinking && thinkingCap?.mode === 'levels' && (
                   <>
-                    <label>{form.thinking_capability?.label || '推理深度'} — {(() => { const labels: Record<string, string> = { off: '关闭', minimal: '极少', low: '低', medium: '中等', high: '高', xhigh: '极高' }; return labels[form.thinking_level] || form.thinking_level; })()}</label>
+                    <label>{thinkingCap?.label || '推理深度'} — {thinkingLevelLabel}</label>
                     <div className="thinking-slider-wrapper">
                       <div className="thinking-labels">
-                        <span className={form.thinking_level === 'off' ? 'active' : ''}>关闭</span>
-                        <span className={form.thinking_level === 'minimal' ? 'active' : ''}>极少</span>
-                        <span className={form.thinking_level === 'low' ? 'active' : ''}>低</span>
-                        <span className={form.thinking_level === 'medium' ? 'active' : ''}>中等</span>
-                        <span className={form.thinking_level === 'high' ? 'active' : ''}>高</span>
-                        <span className={form.thinking_level === 'xhigh' ? 'active fire-label' : ''}>极高🔥</span>
+                        {capLevels.map((l) => (
+                          <span key={l.value} className={effectiveThinkingLevel === l.value ? (l.value === 'xhigh' ? 'active fire-label' : 'active') : ''}>
+                            {l.label}
+                          </span>
+                        ))}
                       </div>
                       <input
                         type="range"
                         min="0"
-                        max="5"
+                        max={capLevels.length - 1}
                         step="1"
-                        value={(() => { const levels = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh']; return levels.indexOf(form.thinking_level); })()}
-                        onChange={(e) => { const levels = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh']; handleChange('thinking_level', levels[parseInt(e.target.value)]); }}
+                        value={thinkingSliderIndex}
+                        onChange={(e) => handleChange('thinking_level', capLevels[parseInt(e.target.value)]?.value || 'high')}
                         className="thinking-slider"
                       />
                       <div className="thinking-fire-particles">
@@ -785,29 +874,17 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       </div>
                     </div>
                   </>
-                ) : form.thinking_capability?.mode === 'switch' ? (
+                )}
+                {/* switch 模式（Qwen）：开启时显示思考预算 / 保留历史配置 */}
+                {form.enable_thinking && thinkingCap?.mode === 'switch' && (
                   <>
-                    <label>{form.thinking_capability?.label || '思考模式'}</label>
-                    <div className="thinking-switch-row">
-                      <label className="toggle-switch">
-                        <input
-                          type="checkbox"
-                          checked={form.enable_thinking}
-                          onChange={(e) => handleChange('enable_thinking', e.target.checked)}
-                        />
-                        <span className="toggle-slider" />
-                      </label>
-                      <span className="thinking-switch-label">
-                        {form.enable_thinking ? '已开启（模型会先思考再回答）' : '已关闭（模型直接回答）'}
-                      </span>
-                    </div>
-                    {form.enable_thinking && form.thinking_capability?.switchConfig?.supportsBudget && (
+                    {thinkingCap?.switchConfig?.supportsBudget && (
                       <div className="form-group" style={{ marginTop: 12 }}>
                         <label>思考 Token 预算（限制思考过程长度）</label>
                         <input
                           type="range"
                           min={0}
-                          max={form.thinking_capability.switchConfig.budgetMax}
+                          max={thinkingCap.switchConfig.budgetMax}
                           step={256}
                           value={form.thinking_budget}
                           onChange={(e) => handleChange('thinking_budget', parseInt(e.target.value))}
@@ -817,7 +894,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                         </span>
                       </div>
                     )}
-                    {form.enable_thinking && form.thinking_capability?.switchConfig?.supportsPreserve && (
+                    {thinkingCap?.switchConfig?.supportsPreserve && (
                       <div className="thinking-switch-row" style={{ marginTop: 8 }}>
                         <label className="toggle-switch small">
                           <input
@@ -831,7 +908,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       </div>
                     )}
                   </>
-                ) : (
+                )}
+                {thinkingCap?.mode === 'none' && (
                   <label className="thinking-none-hint">当前模型不支持思考模式</label>
                 )}
               </div>
@@ -842,8 +920,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             <>
               <div className="settings-section-title">Agent 限流（超过限制时 Agent 会自动阻断工具调用）</div>
               <div className="settings-section-desc">
-                说明：限流配置已由服务端统一管理（data/rate-limit-config.json），
-                工具限流执行器已下线，此处修改仅保存配置、暂不强制生效。
+                说明：限流由服务端实时执行（data/rate-limit-config.json），超过上限时 Agent 会自动阻断工具调用并提示（rate_limit_abort）。保存后立即生效。
               </div>
 
               <div className="form-row">
@@ -919,7 +996,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       {p.name}
                       {activePreset === p.name && <span className="model-default-badge">默认使用</span>}
                     </div>
-                    <div className="preset-meta">{p.model} · {p.baseUrl}{p.apiKey ? '' : ' · 无 API Key'}</div>
+                    <div className="preset-meta">{p.model} · {p.baseUrl}{p.apiKey ? '' : ' · 无 API Key'} · maxTokens: {p.maxTokens ?? 65535}</div>
                   </div>
                   <button className="btn btn-secondary btn-sm" onClick={() => handleStartEditPreset(i)}>编辑</button>
                   <button className="btn btn-danger btn-sm" onClick={() => handleDeletePreset(i)}>删除</button>
@@ -965,6 +1042,18 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       onChange={(e) => setEditingPreset({ ...editingPreset, apiKey: e.target.value })}
                       placeholder="无需认证可留空"
                     />
+                  </div>
+                  <div className="form-group">
+                    <label>最大输出 Tokens</label>
+                    <input
+                      type="number"
+                      value={editingPreset.maxTokens}
+                      onChange={(e) => setEditingPreset({ ...editingPreset, maxTokens: parseInt(e.target.value) || 65535 })}
+                      min={1}
+                      max={128000}
+                      step={100}
+                    />
+                    <div className="settings-field-hint">最大输出 token 数（回复长度上限），默认 65535</div>
                   </div>
                   <div className="preset-editor-actions">
                     <button className="btn btn-primary" onClick={handleSavePreset}>

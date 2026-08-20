@@ -22,7 +22,7 @@ chatRouter.post('/chat', async (req: Request, res: Response): Promise<void> => {
     name?: string;
     rebuild?: boolean;
     history?: { role: string; content: string }[];
-    modelOverrides?: { id?: string; baseUrl?: string; apiKey?: string };
+    modelOverrides?: { id?: string; baseUrl?: string; apiKey?: string; thinkingLevel?: string; maxTokens?: number };
     images?: { type: string; data: string; mimeType: string }[];
   };
 

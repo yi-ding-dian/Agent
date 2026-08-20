@@ -26,5 +26,6 @@ interface Window {
     getEngineStatus: () => Promise<{ initialized: boolean; mcpTools: number; extTools: string[]; errors: string[] }>;
     onAgentEvent: (cb: (event: unknown) => void) => () => void;
     onEngineStatus: (cb: (status: unknown) => void) => () => void;
+    onDropDirectory: (cb: (dir: string) => void) => () => void | undefined;
   };
 }

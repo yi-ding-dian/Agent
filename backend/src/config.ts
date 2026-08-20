@@ -63,8 +63,8 @@ export const config = {
   agentMaxTurns: getInt('AGENT_MAX_TURNS', 20),        // 最大对话轮数（LLM调用次数）
   agentMaxToolCallsPerTurn: getInt('AGENT_MAX_TOOL_CALLS_PER_TURN', 10), // 每轮最大工具调用次数
   agentMaxConsecutiveErrors: getInt('AGENT_MAX_CONSECUTIVE_ERRORS', 5),   // 连续错误阈值
-  // 推理深度（运行时可修改，多级模型用）
-  thinkingLevel: getStr('THINKING_LEVEL', 'medium'),
+  // 推理深度（运行时可修改，多级模型用）；默认「高」
+  thinkingLevel: getStr('THINKING_LEVEL', 'high'),
   // 思考模式开关（开关型模型用，如 Qwen）
   enableThinking: getStr('ENABLE_THINKING', 'true') === 'true',
   thinkingBudget: getInt('THINKING_BUDGET', 1024),
