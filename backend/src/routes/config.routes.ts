@@ -273,10 +273,19 @@ configRouter.post('/test-model-connection', async (req: Request, res: Response):
 
   try {
     // 主验证：真实最小 chat 请求（能实际生成才算连通）
+    // 带一条 system 消息：与真实对话一致（pi-ai 会发 system/developer 角色，
+    // 曾出现"检测通过绿点、发送时被拒"的错配——纯 user 请求测不出系统提示词角色问题）
     const resp = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, messages: [{ role: 'user', content: 'hi' }], max_tokens: 1 }),
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: 'You are a test connection check.' },
+          { role: 'user', content: 'hi' },
+        ],
+        max_tokens: 1,
+      }),
       signal: AbortSignal.timeout(8000),
     });
     const latencyMs = Date.now() - start;

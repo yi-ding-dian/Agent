@@ -55,6 +55,12 @@ export function createQwenModel(overrides?: ModelOverrides): Model<'openai-compl
     headers: {},
     compat: {
       maxTokensField: 'max_tokens',
+      // 系统提示词用 system 角色（而非 OpenAI 新式的 developer 角色）：
+      // pi-ai 的 URL 自动检测只对 nvidia/cerebras/xai/together/deepseek.com/zai/
+      // moonshot/cloudflare 等名单判为"非标准"，本地服务（lm-studio / 内网 IP）
+      // 不在名单 → 误判 supportsDeveloperRole=true → 发 role:"developer"，
+      // 严格兼容服务（只认 system/user/assistant）会拒收。显式关闭，全兼容。
+      supportsDeveloperRole: false,
     },
   };
   // pi-ai 的 Model 类型没有 apiKey 字段，但运行时需要（agent-factory 的 stream 回退链与

@@ -195,6 +195,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [presets, setPresets] = useState<ModelPreset[]>(() => getModelPresets());
   const [activePreset, setActivePreset] = useState<string | null>(() => getActivePresetName());
   const [editingPreset, setEditingPreset] = useState<{ index: number | 'new'; name: string; baseUrl: string; model: string; apiKey: string; maxTokens: number } | null>(null);
+  const [presetTesting, setPresetTesting] = useState(false);
+  const [presetTestResult, setPresetTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [avatar, setAvatar] = useState<string>(() => localStorage.getItem('myagent_avatar') || '');
   const user = useAuthStore((s) => s.user);
   // 服务端全局默认模型（模型设置选中项同步而来；常规 tab「当前模型」展示用）
@@ -382,13 +384,40 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /** 测试当前编辑中的模型配置连通性（后端代理 /api/test-model-connection，无状态，超时 8 秒） */
+  const handlePresetTest = async () => {
+    if (!editingPreset) return;
+    const baseUrl = editingPreset.baseUrl.trim();
+    const model = editingPreset.model.trim();
+    if (!baseUrl || !model) {
+      setPresetTestResult({ ok: false, msg: '请先填写 Base URL 和模型 ID' });
+      return;
+    }
+    setPresetTesting(true);
+    setPresetTestResult(null);
+    try {
+      const r = await api.testModelConnection(baseUrl, model, editingPreset.apiKey.trim());
+      if (r.ok) {
+        setPresetTestResult({ ok: true, msg: `连接正常（${r.latencyMs}ms）` });
+      } else {
+        setPresetTestResult({ ok: false, msg: r.error || '连接失败' });
+      }
+    } catch (e: any) {
+      setPresetTestResult({ ok: false, msg: e.message || '连接失败' });
+    } finally {
+      setPresetTesting(false);
+    }
+  };
+
   const handleStartAddPreset = () => {
+    setPresetTestResult(null);
     setEditingPreset({ index: 'new', name: '', baseUrl: '', model: '', apiKey: '', maxTokens: 65535 });
   };
 
   const handleStartEditPreset = (index: number) => {
     const p = presets[index];
     if (!p) return;
+    setPresetTestResult(null);
     setEditingPreset({ index, name: p.name, baseUrl: p.baseUrl, model: p.model, apiKey: p.apiKey, maxTokens: p.maxTokens ?? 65535 });
   };
 
@@ -1056,11 +1085,17 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     <div className="settings-field-hint">最大输出 token 数（回复长度上限），默认 65535</div>
                   </div>
                   <div className="preset-editor-actions">
+                    <button className="btn btn-secondary" onClick={handlePresetTest} disabled={presetTesting}>
+                      {presetTesting ? '测试中...' : '测试连接'}
+                    </button>
                     <button className="btn btn-primary" onClick={handleSavePreset}>
                       {editingPreset.index === 'new' ? '保存模型' : '保存修改'}
                     </button>
                     <button className="btn btn-secondary" onClick={() => setEditingPreset(null)}>取消</button>
                   </div>
+                  {presetTestResult && (
+                    <div className={`test-result ${presetTestResult.ok ? 'success' : 'error'}`}>{presetTestResult.msg}</div>
+                  )}
                 </div>
               )}
             </>
