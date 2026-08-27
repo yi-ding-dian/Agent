@@ -1,6 +1,6 @@
 import { AgentSessionService, type AgentRunMode } from './agent-service.js';
 import { createQwenModel, type ModelOverrides } from '../agent/llm-config.js';
-import { createCustomTools } from '../tools/index.js';
+import { createCustomTools, ensureRequiredKey } from '../tools/index.js';
 import type { AgentTool, AgentMessage } from '@earendil-works/pi-agent-core';
 import type { Model } from '@earendil-works/pi-ai';
 import { config } from '../config.js';
@@ -177,6 +177,11 @@ export class SessionManager {
       if (mcpTools.length > 0) {
         tools = [...tools, ...mcpTools];
       }
+    }
+
+    // 统一补齐 schema required（内置/扩展/MCP 全可选参数均会缺键，严格服务端拒收）
+    for (const t of tools) {
+      if (t?.parameters != null) ensureRequiredKey(t.parameters);
     }
 
     return tools;

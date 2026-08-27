@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { config, getModelPresets } from '../config.js';
 import { matchCapability } from '../agent/model-adapter.js';
+import { normalizeApiBaseUrl } from '../agent/llm-config.js';
 import { getSessionManager } from '../services/session-manager.js';
 import {
   loadRateLimitConfig,
@@ -261,7 +262,7 @@ async function diagModelsOnline(baseUrl: string, headers: Record<string, string>
 // 返回 { ok: true, latencyMs } 或 { ok: false, error }；超时 8 秒。
 configRouter.post('/test-model-connection', async (req: Request, res: Response): Promise<void> => {
   const body = (req.body ?? {}) as Record<string, unknown>;
-  const baseUrl = String(body.baseUrl ?? '').trim().replace(/\/+$/, '');
+  const baseUrl = normalizeApiBaseUrl(String(body.baseUrl ?? ''));
   const model = String(body.model ?? '').trim();
   const apiKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : '';
   if (!baseUrl || !model) {

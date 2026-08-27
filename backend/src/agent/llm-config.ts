@@ -26,6 +26,21 @@ export class NoDefaultModelError extends Error {
 }
 
 /**
+ * 规整 OpenAI 兼容 API baseUrl（服务端请求与测试连接共用）：
+ * - 去除尾部斜杠
+ * - 用户误填含 /chat/completions 的完整接口路径时，解析回 API 根（如 /v1）——
+ *   pi-ai 与 test-model-connection 均按 apiRoot + /chat/completions 拼接请求，
+ *   baseUrl 保留完整路径会导致双拼（.../chat/completions/chat/completions → HTTP 404）
+ */
+export function normalizeApiBaseUrl(raw: string): string {
+  let s = raw.trim().replace(/\/+$/, '');
+  if (/\/chat\/completions$/i.test(s)) {
+    s = s.replace(/\/chat\/completions$/i, '');
+  }
+  return s;
+}
+
+/**
  * 构建会话模型。本系统不再有"出厂默认模型"：
  * id/baseUrl 必须由调用方显式传入（modelOverrides → 用户全局默认解析后的结果，
  * 或 Electron 主进程经 applyConfig 注入的运行时配置），任一为空即在创建前拦截报错，
@@ -33,7 +48,7 @@ export class NoDefaultModelError extends Error {
  */
 export function createQwenModel(overrides?: ModelOverrides): Model<'openai-completions'> {
   const id = (overrides?.id ?? '').trim();
-  const baseUrl = (overrides?.baseUrl ?? '').trim();
+  const baseUrl = normalizeApiBaseUrl(overrides?.baseUrl ?? '');
   const apiKey = (overrides?.apiKey ?? '').trim();
 
   if (!id || !baseUrl) {

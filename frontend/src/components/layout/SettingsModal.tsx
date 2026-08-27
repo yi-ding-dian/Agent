@@ -187,8 +187,10 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [extensionsLoading, setExtensionsLoading] = useState(false);
   // 外部服务（第 11 个 tab：知识库查询链接）
   const [extUrl, setExtUrl] = useState('');
+  const [extFilesysUrl, setExtFilesysUrl] = useState('');
   const [extStatus, setExtStatus] = useState<{ ok: boolean; msg: string } | null>(null);
-  const [extTesting, setExtTesting] = useState(false);
+  // null = 空闲；'kb' / 'filesys' = 对应链接正在测试
+  const [extTesting, setExtTesting] = useState<'kb' | 'filesys' | null>(null);
   const [extSaving, setExtSaving] = useState(false);
   // 模型预设（localStorage；选中项会同步 POST /api/global-model 持久化到服务端作为该用户的
   // 全局默认模型 —— 后端创建会话时 modelOverrides 与全局默认都无才报错）
@@ -274,7 +276,10 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     if (tab === 'external') {
       setExtStatus(null);
       api.getExternalService()
-        .then((d) => setExtUrl(d.kbQueryUrl || ''))
+        .then((d) => {
+          setExtUrl(d.kbQueryUrl || '');
+          setExtFilesysUrl(d.filesysUrl || '');
+        })
         .catch((e: any) => setExtStatus({ ok: false, msg: e.message }));
     }
   }, [tab]);
@@ -578,17 +583,23 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     }
   };
 
-  // ─── 外部服务（知识库查询链接，服务端 data/external-service-config.json） ───
+  // ─── 外部服务（知识库查询链接 + 文件系统查询链接，服务端 data/external-service-config.json） ───
 
-  const handleExtTest = async () => {
-    if (!extUrl.trim()) {
+  const handleExtTest = async (kind: 'kb' | 'filesys') => {
+    if (kind === 'kb' && !extUrl.trim()) {
       setExtStatus({ ok: false, msg: '请先填写知识库查询链接' });
       return;
     }
-    setExtTesting(true);
+    if (kind === 'filesys' && !extFilesysUrl.trim()) {
+      setExtStatus({ ok: false, msg: '请先填写文件系统查询链接' });
+      return;
+    }
+    setExtTesting(kind);
     setExtStatus(null);
     try {
-      const r = await api.testExternalService(extUrl);
+      const r = kind === 'kb'
+        ? await api.testExternalService({ kbQueryUrl: extUrl.trim() })
+        : await api.testExternalService({ filesysUrl: extFilesysUrl.trim() });
       if (r.ok) {
         setExtStatus({ ok: true, msg: `连接正常（${r.latencyMs}ms）` });
       } else {
@@ -597,7 +608,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     } catch (e: any) {
       setExtStatus({ ok: false, msg: e.message });
     } finally {
-      setExtTesting(false);
+      setExtTesting(null);
     }
   };
 
@@ -605,7 +616,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     setExtSaving(true);
     setExtStatus(null);
     try {
-      await api.saveExternalService(extUrl);
+      await api.saveExternalService({ kbQueryUrl: extUrl.trim(), filesysUrl: extFilesysUrl.trim() });
       setExtStatus({ ok: true, msg: '外部服务配置已保存，立即生效' });
     } catch (e: any) {
       setExtStatus({ ok: false, msg: e.message || '保存失败' });
@@ -1053,6 +1064,9 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       onChange={(e) => setEditingPreset({ ...editingPreset, baseUrl: e.target.value })}
                       placeholder="http://host:port/v1"
                     />
+                    <div className="settings-field-hint">
+                      API 基地址（如 http://host:port/v1），不要包含 /chat/completions（已支持自动兼容）
+                    </div>
                   </div>
                   <div className="form-group">
                     <label>模型 ID</label>
@@ -1486,7 +1500,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
           {tab === 'external' && (
             <>
               <div className="settings-section-desc">
-                外部知识库服务的查询链接；保存后即时生效（无需重启）。
+                外部服务（知识库 / 文件管理系统）的查询链接；保存后即时生效（无需重启）。
               </div>
               <div className="form-group">
                 <label>知识库查询链接</label>
@@ -1499,11 +1513,37 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 <div className="settings-field-hint">
                   从知识库服务获取的查询链接（需含 id 与 token）；留空保存可清除配置。
                 </div>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => handleExtTest('kb')}
+                  disabled={extTesting !== null}
+                  style={{ marginTop: 4 }}
+                >
+                  {extTesting === 'kb' ? '测试中...' : '测试连接'}
+                </button>
+              </div>
+              <div className="form-group">
+                <label>文件系统查询链接</label>
+                <input
+                  type="text"
+                  value={extFilesysUrl}
+                  onChange={(e) => setExtFilesysUrl(e.target.value)}
+                  placeholder="http://<文件系统地址>:5001?token=sk-xxx"
+                />
+                <div className="settings-field-hint">
+                  个人文件管理系统查询链接：地址与 API Token 合成一条（支持 ?token=sk-xxx 或
+                  http://host:port/sk-xxx 形式）；留空保存可清除配置。
+                </div>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => handleExtTest('filesys')}
+                  disabled={extTesting !== null}
+                  style={{ marginTop: 4 }}
+                >
+                  {extTesting === 'filesys' ? '测试中...' : '测试连接'}
+                </button>
               </div>
               <div className="memory-actions">
-                <button className="btn btn-secondary" onClick={handleExtTest} disabled={extTesting}>
-                  {extTesting ? '测试中...' : '测试连接'}
-                </button>
                 <button className="btn btn-primary" onClick={handleExtSave} disabled={extSaving}>
                   {extSaving ? '保存中...' : '保存'}
                 </button>

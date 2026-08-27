@@ -1,10 +1,12 @@
 /**
- * 外部服务配置（知识库查询链接）
+ * 外部服务配置（知识库查询链接 + 文件管理系统查询链接）
  *
  * 数据持久化到 data/external-service-config.json（config.dataDir，部署时可挂载外部卷），
  * 读写模式仿 advanced-config.ts / tool-permission-config.ts，启动自动创建默认文件。
  * - kbQueryUrl：外部知识库查询链接，示例 http://host:port/ext-query/<id>?token=xxx
  *   空串表示未配置（合法）；非空时必须为合法 http/https URL（new URL() 校验）
+ * - filesysUrl：个人文件管理系统查询链接，示例 http://host:port?token=sk-xxx
+ *   （或 http://host:port/sk-xxx，与 mcp fileQuery.parseFileSysUrl 兼容）；空串未配置
  * - 保存后立即生效：模块内内存副本直接更新并落盘，无缓存
  * - 校验策略：加载（load）时非法值回退默认（容错）；保存（save）时非法则拒绝并返回中文错误
  */
@@ -15,10 +17,12 @@ import { config } from '../config.js';
 export interface ExternalServiceConfig {
   /** 外部知识库查询链接（空串 = 未配置） */
   kbQueryUrl: string;
+  /** 文件管理系统查询链接（空串 = 未配置；MCP file_search/file_read 经 /api/agent-config/filesys-link 读取） */
+  filesysUrl: string;
 }
 
 /** 默认值：未配置 */
-const DEFAULT_CONFIG: ExternalServiceConfig = { kbQueryUrl: '' };
+const DEFAULT_CONFIG: ExternalServiceConfig = { kbQueryUrl: '', filesysUrl: '' };
 
 let currentConfig: ExternalServiceConfig = { ...DEFAULT_CONFIG };
 
@@ -59,6 +63,57 @@ export function validateKbQueryUrl(raw: unknown): string | null {
 }
 
 /**
+ * 校验文件管理系统查询链接：空串合法（未配置/清除）；非空须为 http/https 且含 token
+ * （?token=sk-xxx 或路径段 /sk-xxx 形式，与 mcp fileQuery.parseFileSysUrl 一致）
+ */
+export function validateFileSysUrl(raw: unknown): string | null {
+  if (typeof raw !== 'string') return '文件系统查询链接必须是字符串';
+  const url = raw.trim();
+  if (!url) return null; // 空串合法 = 清除配置
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return '文件系统查询链接格式不正确，应为 http://host:port?token=sk-xxx 或 http://host:port/sk-xxx';
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return '文件系统查询链接必须以 http:// 或 https:// 开头';
+  }
+  if (!parsed.hostname) {
+    return '文件系统查询链接缺少有效的主机名';
+  }
+  const hasQueryToken = !!parsed.searchParams.get('token') || !!parsed.searchParams.get('api_key');
+  const seg = parsed.pathname.split('/').filter(Boolean);
+  const hasPathToken = !!seg.length && seg[seg.length - 1]!.startsWith('sk-');
+  if (!hasQueryToken && !hasPathToken) {
+    return '文件系统查询链接缺少 token（应为 ?token=sk-xxx 或 http://host:port/sk-xxx）';
+  }
+  return null;
+}
+
+/**
+ * 解析文件系统链接 → { base, token }（base 为 origin，token 为 sk-...）；
+ * 格式不正确返回 null（校验通过的值都可解析）
+ */
+export function parseFilesysLink(raw: string): { base: string; token: string } | null {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+  const token = url.searchParams.get('token') || url.searchParams.get('api_key') || '';
+  if (!token) {
+    const seg = url.pathname.split('/').filter(Boolean);
+    const last = seg[seg.length - 1] || '';
+    if (last.startsWith('sk-')) return { base: url.origin, token: last };
+    return null;
+  }
+  return { base: url.origin, token };
+}
+
+/**
  * 从文件加载配置（缺失时创建默认文件；文件损坏时回退默认值）。
  */
 export function loadExternalServiceConfig(): ExternalServiceConfig {
@@ -67,7 +122,10 @@ export function loadExternalServiceConfig(): ExternalServiceConfig {
     if (fs.existsSync(filePath)) {
       const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as unknown;
       const src = (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? parsed : {}) as Record<string, unknown>;
-      currentConfig = { kbQueryUrl: typeof src.kbQueryUrl === 'string' ? src.kbQueryUrl.trim() : '' };
+      currentConfig = {
+        kbQueryUrl: typeof src.kbQueryUrl === 'string' ? src.kbQueryUrl.trim() : '',
+        filesysUrl: typeof src.filesysUrl === 'string' ? src.filesysUrl.trim() : '',
+      };
       console.log(`[ExternalServiceConfig] 已加载: ${filePath}`);
     } else {
       currentConfig = { ...DEFAULT_CONFIG };
@@ -87,7 +145,7 @@ export function getExternalServiceConfig(): ExternalServiceConfig {
 }
 
 /**
- * 保存外部服务配置（部分更新，校验 kbQueryUrl）。
+ * 保存外部服务配置（部分更新，校验 kbQueryUrl / filesysUrl）。
  * - 校验通过：更新内存并落盘（立即生效），返回新配置
  * - 校验失败：不落盘，errors 返回中文错误（由路由以 400 返回给前端提示）
  */
@@ -101,7 +159,15 @@ export function saveExternalServiceConfig(partial: Record<string, unknown>): {
     if (err) {
       errors.push(err);
     } else {
-      currentConfig = { kbQueryUrl: typeof partial.kbQueryUrl === 'string' ? partial.kbQueryUrl.trim() : '' };
+      currentConfig = { ...currentConfig, kbQueryUrl: typeof partial.kbQueryUrl === 'string' ? partial.kbQueryUrl.trim() : '' };
+    }
+  }
+  if (partial.filesysUrl !== undefined) {
+    const err = validateFileSysUrl(partial.filesysUrl);
+    if (err) {
+      errors.push(err);
+    } else {
+      currentConfig = { ...currentConfig, filesysUrl: typeof partial.filesysUrl === 'string' ? partial.filesysUrl.trim() : '' };
     }
   }
   if (errors.length === 0) saveToFile(currentConfig);

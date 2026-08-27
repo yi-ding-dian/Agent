@@ -34,11 +34,41 @@ export interface CreateCustomToolsOptions {
   model?: Model<any>;
 }
 
+/**
+ * 归一化工具参数 schema：TypeBox / MCP SDK 对全可选对象不输出 `required` 键
+ * （如 list_files 的 directory/depth、get_time 的 timestamp/format 均可选），
+ * 严格校验的服务端把它读成 null 报
+ * "Invalid schema for function '<name>': null is not of type array" 并拒收整条请求。
+ * 统一补 `required`（无必填字段时为空数组），JSON Schema 语义不变，服务端兼容。
+ *
+ * 应用位置：内置工具（createCustomTools）、以及合并扩展/MCP 工具的最终组装点
+ * （session-manager.buildTools / agent-engine.getTools）——合并后的工具数组
+ * 统一过一遍，保证发到模型侧的所有工具 schema 都带 required。
+ */
+export function ensureRequiredKey<T>(schema: T): void {
+  if (!schema || typeof schema !== 'object') return;
+  const s = schema as {
+    type?: string;
+    required?: unknown;
+    properties?: Record<string, unknown>;
+    items?: unknown;
+    anyOf?: unknown[];
+  };
+  if (s.type === 'object') {
+    if (!Array.isArray(s.required)) s.required = [];
+    for (const v of Object.values(s.properties ?? {})) ensureRequiredKey(v);
+  } else if (s.items) {
+    ensureRequiredKey(s.items);
+  } else if (Array.isArray(s.anyOf)) {
+    for (const v of s.anyOf) ensureRequiredKey(v);
+  }
+}
+
 export function createCustomTools(
   workDir: string,
   opts?: CreateCustomToolsOptions,
 ): AgentTool<any>[] {
-  return [
+  const tools = [
     createReadFileTool(workDir),
     createWriteFileTool(workDir),
     createEditFileTool(workDir),
@@ -51,4 +81,7 @@ export function createCustomTools(
     createRememberTool(),
     createSubagentTool(workDir, { model: opts?.model }),
   ];
+  // 工具按会话实例化，每次返回全新对象，原地补 required 无跨会话污染
+  for (const t of tools) ensureRequiredKey(t.parameters);
+  return tools;
 }

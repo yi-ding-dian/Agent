@@ -16,6 +16,7 @@ import type { Model } from '@earendil-works/pi-ai';
 import { AgentSessionService, type AgentRunMode } from '../services/agent-service.js';
 import { createQwenModel, type ModelOverrides } from '../agent/llm-config.js';
 import { createAgentTools, buildAgentSystemPrompt } from '../agent/agent-config.js';
+import { ensureRequiredKey } from '../tools/index.js';
 import { createChatTools, CHAT_SYSTEM_PROMPT } from '../agent/chat-config.js';
 import { initExtensionLoader, getExtensionTools, type ExtensionModuleLoader } from '../services/extension-loader.js';
 import { initMcpBridge, getMcpBridge } from '../services/mcp-bridge.js';
@@ -199,6 +200,11 @@ export class AgentEngine {
       if (mcpTools.length > 0) {
         tools = [...tools, ...mcpTools];
       }
+    }
+
+    // 统一补齐 schema required（内置/扩展/MCP 全可选参数均会缺键，严格服务端拒收）
+    for (const t of tools) {
+      if (t?.parameters != null) ensureRequiredKey(t.parameters);
     }
 
     this.toolsBySession.set(sessionId, tools);

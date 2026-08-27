@@ -109,6 +109,8 @@ export interface ExtensionCommandInfo {
 export interface ExternalServiceConfig {
   /** 知识库查询链接（空串 = 未配置），示例 http://host:port/ext-query/<id>?token=xxx */
   kbQueryUrl: string;
+  /** 文件管理系统查询链接（空串 = 未配置），示例 http://host:port?token=sk-xxx 或 http://host:port/sk-xxx */
+  filesysUrl: string;
 }
 
 export interface ConfigData {
