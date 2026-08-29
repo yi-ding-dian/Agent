@@ -2,8 +2,11 @@ import { useEffect } from 'react';
 import { AppLayout } from './components/layout/AppLayout';
 import { LoginPage } from './components/auth/LoginPage';
 import { ToastHost } from './components/common/ToastHost';
+import { ConfirmDialogHost } from './components/common/ConfirmDialogHost';
+import { ResizableModal } from './components/common/ResizableModal';
 import { useChatStore } from './store/chat-store';
 import { useAuthStore } from './store/auth-store';
+import { usePreviewStore } from './store/preview-store';
 import { getWSClient } from './services/ws-client';
 import { isElectron } from './services/api-config';
 
@@ -13,6 +16,15 @@ export default function App() {
   const checkAuth = useAuthStore((s) => s.checkAuth);
   const loadSessions = useChatStore((s) => s.loadSessions);
   const loadConfig = useChatStore((s) => s.loadConfig);
+  const previewOpen = usePreviewStore((s) => s.open);
+  const setPreviewOpen = usePreviewStore((s) => s.setOpen);
+
+  // Markdown 渲染的内联「预览」按钮（非 React 代码）经窗口事件触发
+  useEffect(() => {
+    const h = () => setPreviewOpen(true);
+    window.addEventListener('myagent:preview-open', h);
+    return () => window.removeEventListener('myagent:preview-open', h);
+  }, [setPreviewOpen]);
 
   useEffect(() => {
     checkAuth();
@@ -74,6 +86,7 @@ export default function App() {
     return (
       <>
         <ToastHost />
+        <ConfirmDialogHost />
         <div className="login-page">
           <div className="login-card">
             <p style={{ textAlign: 'center', color: '#999' }}>加载中...</p>
@@ -88,6 +101,7 @@ export default function App() {
     return (
       <>
         <ToastHost />
+        <ConfirmDialogHost />
         <LoginPage />
       </>
     );
@@ -97,27 +111,22 @@ export default function App() {
   return (
     <>
       <ToastHost />
+      <ConfirmDialogHost />
       <AppLayout />
-      <div
-        id="previewOverlay"
-        className="preview-overlay"
-        onClick={() => document.getElementById('previewOverlay')?.classList.remove('active')}
-      >
-        <div className="preview-overlay-box" onClick={(e) => e.stopPropagation()}>
-          <div className="preview-overlay-header">
-            <span>HTML 预览</span>
-            <button
-              className="modal-close-btn"
-              onClick={() => document.getElementById('previewOverlay')?.classList.remove('active')}
-            >
-              &#10005;
-            </button>
-          </div>
-          <div className="preview-overlay-body">
-            <iframe id="previewIframe" sandbox="allow-scripts" />
-          </div>
+      {/* HTML 预览浮层（ResizableModal：Esc/mask 点击关闭 + 可拖大小；iframe id 供预览代码动态注入） */}
+      {previewOpen && (
+        <div className="modal-overlay" onClick={() => setPreviewOpen(false)}>
+          <ResizableModal width={900} height="80vh" onEsc={() => setPreviewOpen(false)}>
+            <div className="preview-overlay-header">
+              <span>HTML 预览</span>
+              <button className="modal-close-btn" onClick={() => setPreviewOpen(false)}>&#10005;</button>
+            </div>
+            <div className="preview-overlay-body" style={{ flex: 1, minHeight: 0 }}>
+              <iframe id="previewIframe" sandbox="allow-scripts" style={{ width: '100%', height: '100%', border: 0 }} />
+            </div>
+          </ResizableModal>
         </div>
-      </div>
+      )}
       {/* 图片放大遮罩 */}
       <div
         id="imageOverlay"

@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useRef, useLayoutEffect } from 'react';
 import hljs from 'highlight.js';
+import { usePreviewStore } from '../../store/preview-store';
 
 interface CodeBlockProps {
   code: string;
@@ -73,7 +74,7 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
               const iframe = document.getElementById('previewIframe') as HTMLIFrameElement;
               if (iframe) {
                 iframe.srcdoc = code;
-                document.getElementById('previewOverlay')?.classList.add('active');
+                usePreviewStore.getState().setOpen(true);
               }
             }}>
               预览

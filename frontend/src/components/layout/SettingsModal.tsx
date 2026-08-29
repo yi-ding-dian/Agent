@@ -2,8 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { useChatStore } from '../../store/chat-store';
 import { useAuthStore } from '../../store/auth-store';
 import { toast } from '../../store/toast-store';
+import { confirmDialog } from '../../store/confirm-dialog';
+import { ResizableModal } from '../common/ResizableModal';
 import type { AdvancedConfig, ConfigData, ExtensionInfo, ExternalServiceEntry, McpServerConfig, ToolPermissionValue } from '../../types/api';
 import * as api from '../../services/api';
+import { isElectron } from '../../services/api-config';
 import {
   getModelPresets,
   saveModelPresets,
@@ -98,7 +101,7 @@ function DirBrowser({
 
   return (
     <div className="dir-browser-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="dir-browser">
+      <ResizableModal width={480} maxHeight="70vh" onEsc={onClose}>
         <div className="dir-browser-header">
           <span className="dir-browser-title">选择目录</span>
           <button className="modal-close-btn" onClick={onClose}>&#10005;</button>
@@ -130,7 +133,7 @@ function DirBrowser({
           <button className="btn btn-secondary" onClick={onClose}>取消</button>
           <button className="btn btn-primary" onClick={() => { onSelect(dirPath); onClose(); }}>选择此目录</button>
         </div>
-      </div>
+      </ResizableModal>
     </div>
   );
 }
@@ -277,6 +280,16 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
   const handleChange = (field: keyof ConfigData, value: string | number | boolean) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  /** 「浏览」工作目录：Electron 桌面端走系统目录选择对话框；Web 模式走定制目录浏览器 */
+  const handleBrowse = async () => {
+    if (isElectron() && window.myagent?.selectDirectory) {
+      const dir = await window.myagent.selectDirectory();
+      if (dir) handleChange('work_dir', dir);
+      return;
+    }
+    setBrowsing(true);
   };
 
   // ─── 工具权限 ───────────────────────
@@ -443,10 +456,16 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     setEditingPreset(null);
   };
 
-  const handleDeletePreset = (index: number) => {
+  const handleDeletePreset = async (index: number) => {
     const target = presets[index];
     if (!target) return;
-    if (!window.confirm(`删除预设 "${target.name}"？`)) return;
+    const r = await confirmDialog.confirm({
+      title: '删除预设',
+      message: `删除预设 "${target.name}"？`,
+      danger: true,
+      confirmLabel: '删除',
+    });
+    if (r !== 'confirm') return;
     const next = presets.filter((_, i) => i !== index);
     setPresets(next);
     saveModelPresets(next);
@@ -472,8 +491,14 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     }
   };
 
-  const handleClearMemory = () => {
-    if (!window.confirm('确定清空全部记忆吗？此操作不可撤销。')) return;
+  const handleClearMemory = async () => {
+    const r = await confirmDialog.confirm({
+      title: '清空全部记忆',
+      message: '确定清空全部记忆吗？此操作不可撤销。',
+      danger: true,
+      confirmLabel: '清空',
+    });
+    if (r !== 'confirm') return;
     setMemoryText('');
     handleSaveMemory('');
   };
@@ -510,7 +535,13 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   };
 
   const handleMcpDelete = async (srv: McpServerConfig) => {
-    if (!window.confirm(`确定删除 MCP 服务「${srv.name}」吗？其工具将不再可用。`)) return;
+    const r = await confirmDialog.confirm({
+      title: '删除 MCP 服务',
+      message: `确定删除 MCP 服务「${srv.name}」吗？其工具将不再可用。`,
+      danger: true,
+      confirmLabel: '删除',
+    });
+    if (r !== 'confirm') return;
     try {
       const cfg = await api.deleteMcpServer(srv.name);
       setMcpServers(cfg.servers || []);
@@ -584,10 +615,16 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     }
   };
 
-  const handleExtDelete = (index: number) => {
+  const handleExtDelete = async (index: number) => {
     const s = extServices[index];
     if (!s) return;
-    if (!window.confirm(`删除外部服务「${s.title}」？${s.id === 'kb' ? '（知识库查询将变为未配置）' : s.id === 'filesys' ? '（文件系统查询将变为未配置）' : ''}`)) return;
+    const r = await confirmDialog.confirm({
+      title: '删除外部服务',
+      message: `删除外部服务「${s.title}」？${s.id === 'kb' ? '（知识库查询将变为未配置）' : s.id === 'filesys' ? '（文件系统查询将变为未配置）' : ''}`,
+      danger: true,
+      confirmLabel: '删除',
+    });
+    if (r !== 'confirm') return;
     setExtServices((prev) => prev.filter((_, i) => i !== index));
     toast.info(`已删除「${s.title}」`);
   };
@@ -720,7 +757,13 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
   return (
     <div className="modal-overlay" onClick={handleOverlayClick}>
-      <div className="modal settings-modal">
+      <ResizableModal
+        width={920}
+        height="min(82vh, 680px)"
+        style={{ width: '920px', height: 'min(82vh, 680px)' }}
+        className="settings-modal"
+        onEsc={onClose}
+      >
         <div className="modal-header">
           <h2>设置</h2>
           <button className="modal-close-btn" onClick={onClose}>
@@ -814,7 +857,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     placeholder="输入工作目录路径"
                     list="work-dir-suggestions"
                   />
-                  <button type="button" className="btn btn-secondary" onClick={() => setBrowsing(true)}>
+                  <button type="button" className="btn btn-secondary" onClick={handleBrowse}>
                     浏览
                   </button>
                 </div>
@@ -1522,7 +1565,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
               </div>
               {showServiceModal && (
                 <div className="modal-overlay" onClick={() => setShowServiceModal(false)}>
-                  <div className="modal" style={{ width: 480 }} onClick={(e) => e.stopPropagation()}>
+                  <ResizableModal width={480} onEsc={() => setShowServiceModal(false)}>
                     <div className="modal-header">
                       <h2>新增外部服务</h2>
                       <button className="modal-close-btn" onClick={() => setShowServiceModal(false)}>&#10005;</button>
@@ -1560,7 +1603,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                         <button className="btn btn-secondary" onClick={() => setShowServiceModal(false)}>取消</button>
                       </div>
                     </div>
-                  </div>
+                  </ResizableModal>
                 </div>
               )}
             </>
@@ -1631,7 +1674,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             onClose={() => setBrowsing(false)}
           />
         )}
-      </div>
+    </ResizableModal>
     </div>
   );
 }

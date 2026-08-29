@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AgentInfo } from '../../types/chat';
 import { MarkdownRenderer } from '../common/MarkdownRenderer';
+import { ResizableModal } from '../common/ResizableModal';
 
 interface AgentDetailModalProps {
   agent: AgentInfo;
@@ -138,24 +139,15 @@ export function AgentDetailModal({ agent, index, onClose }: AgentDetailModalProp
     ? Math.max(0, Math.round((agent.endedAt - agent.startedAt) / 1000))
     : Math.max(0, Math.round((Date.now() - agent.startedAt) / 1000));
 
-  // Esc 关闭
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
   // 挂到 document.body：父级 .question-panel 有 backdrop-filter + overflow，
   // 会劫持 fixed 定位并裁剪弹窗，portal 到 body 规避
+  // Esc 关闭 / Tab 焦点圈禁由 ResizableModal 统一处理
   return createPortal(
-    <div className="agent-detail-overlay" onClick={onClose}>
-      <div
-        className="agent-detail-modal"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-label={`Agent ${index} 详情`}
+    <div className="modal-overlay" onClick={onClose}>
+      <ResizableModal
+        width={620}
+        maxHeight="82vh"
+        onEsc={onClose}
       >
         <div className="agent-detail-header">
           <span className="agent-detail-title">Agent #{index}</span>
@@ -302,7 +294,7 @@ export function AgentDetailModal({ agent, index, onClose }: AgentDetailModalProp
             </div>
           )}
         </div>
-      </div>
+      </ResizableModal>
     </div>,
     document.body,
   );

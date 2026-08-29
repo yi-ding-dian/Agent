@@ -130,8 +130,7 @@
 }
 /* 深色下无边框浮层补边框，避免与背景融为一体 */
 [data-theme='dark'] .modal,
-[data-theme='dark'] .login-card,
-[data-theme='dark'] .dir-browser {
+[data-theme='dark'] .login-card {
   border: 1px solid var(--border);
 }
 
@@ -1317,35 +1316,6 @@ a:hover {
 }
 
 /* ---- HTML 预览浮层（全局 overlay + iframe） ---- */
-.preview-overlay {
-  display: none;
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 1000;
-  align-items: center;
-  justify-content: center;
-}
-
-.preview-overlay.active {
-  display: flex;
-}
-
-.preview-overlay-box {
-  background: var(--bg-secondary);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-  width: 90%;
-  max-width: 900px;
-  height: 80vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
 .preview-overlay-header {
   position: relative;
   display: flex;
@@ -1907,12 +1877,12 @@ a:hover {
   background: var(--bg-secondary);
   border-radius: var(--radius-lg);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-  min-width: 480px;
   max-width: 90vw;
   max-height: 85vh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  position: relative; /* 拖拽热区（mr-edge）定位基准 */
 }
 
 .modal-header {
@@ -1931,7 +1901,7 @@ a:hover {
 
 .modal-header .modal-close-btn {
   position: absolute;
-  right: 24px;
+  right: 16px;
   top: 50%;
   transform: translateY(-50%);
 }
@@ -1951,6 +1921,43 @@ a:hover {
 .modal-close-btn:hover {
   background-color: var(--bg-primary);
 }
+
+/* ─── ResizableModal 结构（移植自 svn-git/modal-shell，变量适配 MyAgent 主题） ─── */
+.modal h3 {
+  padding: 20px 24px 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.modal .body {
+  padding: 12px 20px 14px;
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal .foot {
+  padding: 12px 20px 14px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+/* 可调整大小弹窗:8 方向边缘拖拽手柄(悬停弹窗时显现,命中高亮) */
+.mr-edge {
+  position: absolute;
+  z-index: 6;
+  border-radius: 3px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.modal:hover .mr-edge { opacity: 0.16; }
+.modal:hover .mr-edge:hover,
+.modal:hover .mr-edge.active { opacity: 0.55; }
 
 /* 右栏内容区（原 .modal-body 的滚动/间距样式，仅设置弹窗使用） */
 .settings-content {
@@ -1992,11 +1999,6 @@ a:hover {
 }
 
 /* ---- 设置弹窗固定尺寸（两栏布局 + 加宽；切换菜单/内容时尺寸不跳动） ---- */
-.settings-modal {
-  width: 920px;
-  height: min(82vh, 680px);
-  max-width: 94vw;
-}
 
 /* ---- 设置底部栏 ---- */
 .settings-bottom-bar {
@@ -3031,19 +3033,6 @@ a:hover {
   border-radius: var(--radius-lg);
 }
 
-.dir-browser {
-  background: var(--bg-secondary);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-  width: 90%;
-  max-width: 480px;
-  max-height: 70vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border: 1px solid var(--border);
-}
-
 .dir-browser-header {
   position: relative;
   display: flex;
@@ -3970,31 +3959,6 @@ a:hover {
 /* ========================================
    Agent 详情弹窗（portal 到 document.body）
    ======================================== */
-.agent-detail-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  background: rgba(0, 0, 0, 0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-
-.agent-detail-modal {
-  width: 620px;
-  max-width: 92vw;
-  max-height: 82vh;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
-  overflow: hidden;
-}
-
-.agent-detail-header {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -4205,80 +4169,80 @@ a:hover {
 
 /* 弹窗内 Markdown 渲染：与主界面 .message-bubble .markdown-content 规则对齐
    （标题/表格/列表/引用/行内代码；代码块样式由全局 .code-block-wrapper 提供，可直接复用） */
-.agent-detail-modal .markdown-content {
+.modal .markdown-content {
   max-width: 100%;
   min-width: 0;
 }
 
-.agent-detail-modal .markdown-content img {
+.modal .markdown-content img {
   max-width: 100%;
   height: auto;
 }
 
-.agent-detail-modal .markdown-content p {
+.modal .markdown-content p {
   margin-bottom: 8px;
 }
 
-.agent-detail-modal .markdown-content p:last-child {
+.modal .markdown-content p:last-child {
   margin-bottom: 0;
 }
 
-.agent-detail-modal .markdown-content ul,
-.agent-detail-modal .markdown-content ol {
+.modal .markdown-content ul,
+.modal .markdown-content ol {
   padding-left: 20px;
   margin-bottom: 8px;
 }
 
-.agent-detail-modal .markdown-content li {
+.modal .markdown-content li {
   margin-bottom: 4px;
 }
 
-.agent-detail-modal .markdown-content h1,
-.agent-detail-modal .markdown-content h2,
-.agent-detail-modal .markdown-content h3,
-.agent-detail-modal .markdown-content h4 {
+.modal .markdown-content h1,
+.modal .markdown-content h2,
+.modal .markdown-content h3,
+.modal .markdown-content h4 {
   margin-top: 12px;
   margin-bottom: 6px;
   font-weight: 600;
 }
 
-.agent-detail-modal .markdown-content h1 { font-size: 18px; }
-.agent-detail-modal .markdown-content h2 { font-size: 16px; }
-.agent-detail-modal .markdown-content h3 { font-size: 15px; }
+.modal .markdown-content h1 { font-size: 18px; }
+.modal .markdown-content h2 { font-size: 16px; }
+.modal .markdown-content h3 { font-size: 15px; }
 
-.agent-detail-modal .markdown-content blockquote {
+.modal .markdown-content blockquote {
   border-left: 3px solid var(--accent);
   padding-left: 12px;
   margin: 8px 0;
   color: var(--text-secondary);
 }
 
-.agent-detail-modal .markdown-content table {
+.modal .markdown-content table {
   border-collapse: collapse;
   margin: 8px 0;
   width: 100%;
   font-size: 13px;
 }
 
-.agent-detail-modal .markdown-content th,
-.agent-detail-modal .markdown-content td {
+.modal .markdown-content th,
+.modal .markdown-content td {
   border: 1px solid var(--border);
   padding: 6px 10px;
   text-align: left;
 }
 
-.agent-detail-modal .markdown-content th {
+.modal .markdown-content th {
   background-color: var(--bg-primary);
   font-weight: 600;
 }
 
-.agent-detail-modal .markdown-content hr {
+.modal .markdown-content hr {
   border: none;
   border-top: 1px solid var(--border);
   margin: 12px 0;
 }
 
-.agent-detail-modal .markdown-content code:not(pre code) {
+.modal .markdown-content code:not(pre code) {
   background-color: rgba(0, 0, 0, 0.06);
   padding: 2px 6px;
   border-radius: 4px;

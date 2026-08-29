@@ -49,7 +49,7 @@ function buildCodeBlock(
       ${isHtml ? `<button class="code-block-preview-btn" data-html="${attr(trimmed)}" onclick="void function(btn){
         var iframe=document.getElementById('previewIframe');
         iframe.srcdoc=btn.getAttribute('data-html');
-        document.getElementById('previewOverlay').classList.add('active');
+        window.dispatchEvent(new Event('myagent:preview-open'));
       }(this)">预览</button>` : ''}
       <button class="code-block-copy-btn" onclick="void function(btn){
         var code=btn.closest('.code-block-wrapper').querySelector('code').textContent;

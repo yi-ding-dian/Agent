@@ -11,6 +11,8 @@ interface Window {
     testConnection: (url: string) => Promise<{ ok: boolean; error?: string }>;
     navigate: (url: string) => void;
     getDropDirPath: (file: File) => Promise<string>;
+    /** 打开系统目录选择对话框（Electron 桌面端「浏览」按钮）；取消返回 null */
+    selectDirectory: () => Promise<string | null>;
 
     // Agent 引擎 IPC（Electron 模式）
     chatSend: (payload: unknown) => Promise<{ ok: boolean; error?: string }>;

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import http from 'http';
@@ -175,6 +175,15 @@ function registerServerUrlHandlers(): void {
     } catch {
       return path.dirname(filePath);
     }
+  });
+  // 系统目录选择对话框（Electron 桌面端「浏览」按钮：openDirectory）；取消返回 null
+  ipcMain.handle('select-directory', async () => {
+    if (!mainWindow) return null;
+    const r = await dialog.showOpenDialog(mainWindow, {
+      title: '选择工作目录',
+      properties: ['openDirectory'],
+    });
+    return r.canceled || !r.filePaths[0] ? null : r.filePaths[0];
   });
   ipcMain.on('navigate', (_e, url: string) => {
     if (mainWindow) {
