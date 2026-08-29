@@ -183,6 +183,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [mcpServers, setMcpServers] = useState<McpServerConfig[]>([]);
   const [mcpForm, setMcpForm] = useState({ name: '', command: '', args: '', description: '' });
   const [mcpSaving, setMcpSaving] = useState(false);
+  const [showMcpModal, setShowMcpModal] = useState(false);
   // 扩展（第 10 个 tab：扩展管理）
   const [extensions, setExtensions] = useState<ExtensionInfo[]>([]);
   const [extensionsLoading, setExtensionsLoading] = useState(false);
@@ -317,6 +318,14 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     } finally {
       setSaving(false);
     }
+  };
+
+  /** 底部统一保存：按当前 tab 分派各自的保存动作（位置统一，动作语义一致） */
+  const handleBottomSave = (): void => {
+    if (tab === 'memory') void handleSaveMemory();
+    else if (tab === 'advanced') void handleSaveAdvanced();
+    else if (tab === 'external') void handleExtSave();
+    else void handleSave();
   };
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -454,6 +463,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
       setActivePreset(name);
     }
     setEditingPreset(null);
+    toast.success(`已保存模型「${name}」`);
   };
 
   const handleDeletePreset = async (index: number) => {
@@ -572,6 +582,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
       });
       setMcpServers(cfg.servers || []);
       setMcpForm({ name: '', command: '', args: '', description: '' });
+      setShowMcpModal(false);
       toast.success(`已新增「${name}」，新建会话生效`);
     } catch (e: any) {
       toast.error(e.message);
@@ -1085,8 +1096,17 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
               <button className="btn btn-secondary" onClick={handleStartAddPreset} style={{ marginTop: 8 }}>
                 + 新增模型
               </button>
-              {editingPreset && (
-                <div className="preset-editor">
+            </>
+          )}
+
+          {editingPreset && (
+            <div className="modal-overlay" onClick={() => setEditingPreset(null)}>
+              <ResizableModal width={480} onEsc={() => setEditingPreset(null)}>
+                <div className="modal-header">
+                  <h2>{editingPreset.index === 'new' ? '新增模型' : '编辑模型'}</h2>
+                  <button className="modal-close-btn" onClick={() => setEditingPreset(null)}>&#10005;</button>
+                </div>
+                <div className="body" style={{ paddingTop: 10 }}>
                   <div className="form-group">
                     <label>模型名称</label>
                     <input
@@ -1138,18 +1158,18 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     />
                     <div className="settings-field-hint">最大输出 token 数（回复长度上限），默认 65535</div>
                   </div>
-                  <div className="preset-editor-actions">
-                    <button className="btn btn-secondary" onClick={handlePresetTest} disabled={presetTesting}>
-                      {presetTesting ? '测试中...' : '测试连接'}
-                    </button>
-                    <button className="btn btn-primary" onClick={handleSavePreset}>
-                      {editingPreset.index === 'new' ? '保存模型' : '保存修改'}
-                    </button>
-                    <button className="btn btn-secondary" onClick={() => setEditingPreset(null)}>取消</button>
-                  </div>
                 </div>
-              )}
-            </>
+                <div className="foot">
+                  <button className="btn btn-secondary" onClick={handlePresetTest} disabled={presetTesting}>
+                    {presetTesting ? '测试中...' : '测试连接'}
+                  </button>
+                  <button className="btn btn-secondary" onClick={() => setEditingPreset(null)}>取消</button>
+                  <button className="btn btn-primary" onClick={handleSavePreset}>
+                    {editingPreset.index === 'new' ? '保存模型' : '保存修改'}
+                  </button>
+                </div>
+              </ResizableModal>
+            </div>
           )}
 
           {tab === 'permissions' && (
@@ -1190,9 +1210,6 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 />
               </div>
               <div className="memory-actions">
-                <button className="btn btn-primary" onClick={() => handleSaveMemory()} disabled={memorySaving}>
-                  {memorySaving ? '保存中...' : '保存记忆'}
-                </button>
                 <button
                   className="btn btn-secondary"
                   onClick={handleDistillMemory}
@@ -1368,15 +1385,6 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   <div className="settings-field-hint">Agent 搜索时默认返回的结果条数</div>
                 </div>
               </div>
-
-              <div className="memory-actions" style={{ marginTop: 16 }}>
-                <button className="btn btn-primary" onClick={handleSaveAdvanced} disabled={advSaving}>
-                  {advSaving ? '保存中...' : '保存高级设置'}
-                </button>
-                <span className="settings-field-hint" style={{ alignSelf: 'center', marginLeft: 12 }}>
-                  保存成功后立即生效，无需重启服务
-                </span>
-              </div>
             </>
           )}
 
@@ -1424,56 +1432,71 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 </div>
               ))}
 
-              {/* 新增表单 */}
-              <hr className="settings-divider" />
-              <div className="settings-section-title">新增外部 MCP 服务</div>
-              <div className="form-group">
-                <label>服务名称</label>
-                <input
-                  type="text"
-                  value={mcpForm.name}
-                  onChange={(e) => setMcpForm({ ...mcpForm, name: e.target.value })}
-                  placeholder="如：filesystem（字母/数字/下划线/连字符，1-32 位）"
-                />
-                <div className="settings-field-hint">唯一名称，作为工具名前缀（外部服务工具显示为 mcp__名称__工具名）</div>
-              </div>
-              <div className="form-group">
-                <label>命令</label>
-                <input
-                  type="text"
-                  value={mcpForm.command}
-                  onChange={(e) => setMcpForm({ ...mcpForm, command: e.target.value })}
-                  placeholder="如：npx"
-                />
-                <div className="settings-field-hint">可执行命令（如 node、npx、python3），仅允许常见可执行名</div>
-              </div>
-              <div className="form-group">
-                <label>参数（逗号分隔）</label>
-                <input
-                  type="text"
-                  value={mcpForm.args}
-                  onChange={(e) => setMcpForm({ ...mcpForm, args: e.target.value })}
-                  placeholder="如：-y, @modelcontextprotocol/server-filesystem, /tmp"
-                />
-              </div>
-              <div className="form-group">
-                <label>描述</label>
-                <input
-                  type="text"
-                  value={mcpForm.description}
-                  onChange={(e) => setMcpForm({ ...mcpForm, description: e.target.value })}
-                  placeholder="该服务提供哪些工具（可留空）"
-                />
-              </div>
-              <div className="memory-actions">
-                <button className="btn btn-primary" onClick={handleMcpAdd} disabled={mcpSaving}>
-                  {mcpSaving ? '保存中...' : '+ 新增服务'}
-                </button>
-                <span className="settings-field-hint" style={{ alignSelf: 'center', marginLeft: 12 }}>
-                  新增/启停后请新建会话使用新工具
-                </span>
-              </div>
+              {/* 新增入口（弹窗） */}
+              <button className="btn btn-secondary" onClick={() => setShowMcpModal(true)} style={{ marginBottom: 12 }}>
+                + 新增外部 MCP 服务
+              </button>
             </>
+          )}
+
+          {showMcpModal && (
+            <div className="modal-overlay" onClick={() => setShowMcpModal(false)}>
+              <ResizableModal width={480} onEsc={() => setShowMcpModal(false)}>
+                <div className="modal-header">
+                  <h2>新增外部 MCP 服务</h2>
+                  <button className="modal-close-btn" onClick={() => setShowMcpModal(false)}>&#10005;</button>
+                </div>
+                <div className="body" style={{ paddingTop: 10 }}>
+                  <div className="form-group">
+                    <label>服务名称</label>
+                    <input
+                      type="text"
+                      value={mcpForm.name}
+                      onChange={(e) => setMcpForm({ ...mcpForm, name: e.target.value })}
+                      placeholder="如：filesystem（字母/数字/下划线/连字符，1-32 位）"
+                    />
+                    <div className="settings-field-hint">唯一名称，作为工具名前缀（外部服务工具显示为 mcp__名称__工具名）</div>
+                  </div>
+                  <div className="form-group">
+                    <label>命令</label>
+                    <input
+                      type="text"
+                      value={mcpForm.command}
+                      onChange={(e) => setMcpForm({ ...mcpForm, command: e.target.value })}
+                      placeholder="如：npx"
+                    />
+                    <div className="settings-field-hint">可执行命令（如 node、npx、python3），仅允许常见可执行名</div>
+                  </div>
+                  <div className="form-group">
+                    <label>参数（逗号分隔）</label>
+                    <input
+                      type="text"
+                      value={mcpForm.args}
+                      onChange={(e) => setMcpForm({ ...mcpForm, args: e.target.value })}
+                      placeholder="如：-y, @modelcontextprotocol/server-filesystem, /tmp"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>描述</label>
+                    <input
+                      type="text"
+                      value={mcpForm.description}
+                      onChange={(e) => setMcpForm({ ...mcpForm, description: e.target.value })}
+                      placeholder="该服务提供哪些工具（可留空）"
+                    />
+                  </div>
+                </div>
+                <div className="foot">
+                  <span className="settings-field-hint" style={{ alignSelf: 'center' }}>
+                    新增后请新建会话使用新工具
+                  </span>
+                  <button className="btn btn-secondary" onClick={() => setShowMcpModal(false)}>取消</button>
+                  <button className="btn btn-primary" onClick={handleMcpAdd} disabled={mcpSaving}>
+                    {mcpSaving ? '保存中...' : '添加'}
+                  </button>
+                </div>
+              </ResizableModal>
+            </div>
           )}
 
           {tab === 'extensions' && (
@@ -1555,14 +1578,6 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
               <button className="btn btn-secondary" onClick={() => setShowServiceModal(true)} style={{ marginBottom: 12 }}>
                 + 新增服务
               </button>
-              <div className="memory-actions">
-                <button className="btn btn-primary" onClick={handleExtSave} disabled={extSaving}>
-                  {extSaving ? '保存中...' : '保存'}
-                </button>
-                <span className="settings-field-hint" style={{ alignSelf: 'center', marginLeft: 12 }}>
-                  保存成功后立即生效，无需重启服务；测试连接验证当前填写内容
-                </span>
-              </div>
               {showServiceModal && (
                 <div className="modal-overlay" onClick={() => setShowServiceModal(false)}>
                   <ResizableModal width={480} onEsc={() => setShowServiceModal(false)}>
@@ -1654,16 +1669,16 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
           </div>
         </div>
-        {/* 底部保存栏保留在弹窗整体底部（两栏之下）：切换左侧菜单时按钮位置固定、弹窗尺寸稳定；
-            记忆/高级/MCP/外部服务等 tab 的独立保存按钮仍位于右侧内容区内，原样保留 */}
-        {tab !== 'user' && tab !== 'memory' && tab !== 'advanced' && tab !== 'mcp' && tab !== 'extensions' && tab !== 'external' && (
+        {/* 底部统一保存栏：所有 tab 的「保存」固定在此处（按 tab 分派各自的保存动作）；
+            无保存语义的 tab（账户/模型设置/扩展/MCP 操作即时生效）不显示 */}
+        {tab !== 'user' && tab !== 'presets' && tab !== 'mcp' && tab !== 'extensions' && (
           <div className="settings-bottom-bar">
             <button
               className="btn btn-primary"
-              onClick={handleSave}
-              disabled={saving}
+              onClick={handleBottomSave}
+              disabled={saving || memorySaving || advSaving || extSaving}
             >
-              {saving ? '保存中...' : '保存'}
+              {saving || memorySaving || advSaving || extSaving ? '保存中...' : '保存'}
             </button>
           </div>
         )}
