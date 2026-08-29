@@ -105,12 +105,20 @@ export interface ExtensionCommandInfo {
   extension: string;
 }
 
+/** 外部服务条目（可自定义；id='kb'/'filesys' 为内置，MCP 工具以 fixed id 取链接） */
+export interface ExternalServiceEntry {
+  id: string;
+  /** 显示标题 */
+  title: string;
+  /** 查询链接（内置条目空串 = 未配置） */
+  url: string;
+  /** 描述（可选） */
+  description: string;
+}
+
 /** 外部服务配置（服务端 data/external-service-config.json，保存后即时生效） */
 export interface ExternalServiceConfig {
-  /** 知识库查询链接（空串 = 未配置），示例 http://host:port/ext-query/<id>?token=xxx */
-  kbQueryUrl: string;
-  /** 文件管理系统查询链接（空串 = 未配置），示例 http://host:port?token=sk-xxx 或 http://host:port/sk-xxx */
-  filesysUrl: string;
+  services: ExternalServiceEntry[];
 }
 
 export interface ConfigData {

@@ -354,7 +354,7 @@ export async function listDirectory(path: string): Promise<{  path: string;
   return res.json();
 }
 
-// ─── 外部服务配置（知识库查询链接 + 文件系统查询链接，服务端 data/external-service-config.json） ───
+// ─── 外部服务配置（可自定义查询链接列表，服务端 data/external-service-config.json） ───
 
 /** 获取外部服务配置 */
 export async function getExternalService(): Promise<ExternalServiceConfig> {
@@ -363,12 +363,12 @@ export async function getExternalService(): Promise<ExternalServiceConfig> {
   return res.json();
 }
 
-/** 保存外部服务配置（部分字段更新；空串=清除；校验失败时抛出后端中文错误） */
-export async function saveExternalService(partial: Partial<ExternalServiceConfig>): Promise<ExternalServiceConfig> {
+/** 保存外部服务配置（services 全量替换；校验失败时抛出后端中文错误） */
+export async function saveExternalService(config: Partial<ExternalServiceConfig> | ExternalServiceConfig): Promise<ExternalServiceConfig> {
   const res = await fetch(apiUrl('/api/external-service'), {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify(partial),
+    body: JSON.stringify(config),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => null);
@@ -424,9 +424,9 @@ export async function runExtensionCommand(
   return res.json();
 }
 
-/** 测试外部服务链接连通性（后端代理，避开浏览器 CORS；无状态，超时 8 秒；kbQueryUrl/filesysUrl 二选一） */
+/** 测试外部服务链接连通性（后端代理，避开浏览器 CORS；无状态，超时 8 秒） */
 export async function testExternalService(
-  target: Partial<ExternalServiceConfig>,
+  target: { id?: string; url?: string },
 ): Promise<{ ok: boolean; latencyMs?: number; error?: string }> {
   try {
     const res = await fetch(apiUrl('/api/external-service/test'), {

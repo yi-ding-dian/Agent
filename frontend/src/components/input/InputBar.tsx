@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, KeyboardEvent, useEffect, useMemo } from 'react';
 import { useChatStore } from '../../store/chat-store';
+import { toast } from '../../store/toast-store';
 import { StopButton } from './StopButton';
 import type { ImageAttachment } from '../../types/chat';
 import * as api from '../../services/api';
@@ -352,8 +353,7 @@ export function InputBar() {
       if (!file) continue;
 
       if (file.size > MAX_IMAGE_SIZE) {
-        // 可以加 toast 提示，这里先用 alert
-        alert(`图片 "${file.name || '粘贴图片'}" 超过 10MB 限制`);
+        toast.error(`图片 "${file.name || '粘贴图片'}" 超过 10MB 限制`);
         continue;
       }
 
@@ -361,7 +361,7 @@ export function InputBar() {
         const attachment = await readImageAsAttachment(file);
         newAttachments.push(attachment);
       } catch {
-        alert('图片读取失败，请重试');
+        toast.error('图片读取失败，请重试');
       }
     }
 
@@ -387,14 +387,14 @@ export function InputBar() {
       const newAttachments: ImageAttachment[] = [];
       for (const file of files) {
         if (file.size > MAX_IMAGE_SIZE) {
-          alert(`图片 "${file.name}" 超过 10MB 限制`);
+          toast.error(`图片 "${file.name}" 超过 10MB 限制`);
           continue;
         }
         try {
           const attachment = await readImageAsAttachment(file);
           newAttachments.push(attachment);
         } catch {
-          alert('图片读取失败，请重试');
+          toast.error('图片读取失败，请重试');
         }
       }
       if (newAttachments.length > 0) {
@@ -422,14 +422,14 @@ export function InputBar() {
     const newAttachments: ImageAttachment[] = [];
     for (const file of imageFiles) {
       if (file.size > MAX_IMAGE_SIZE) {
-        alert(`图片 "${file.name}" 超过 10MB 限制`);
+        toast.error(`图片 "${file.name}" 超过 10MB 限制`);
         continue;
       }
       try {
         const attachment = await readImageAsAttachment(file);
         newAttachments.push(attachment);
       } catch {
-        alert('图片读取失败，请重试');
+        toast.error('图片读取失败，请重试');
       }
     }
     if (newAttachments.length > 0) {

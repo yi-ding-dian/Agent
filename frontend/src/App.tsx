@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { AppLayout } from './components/layout/AppLayout';
 import { LoginPage } from './components/auth/LoginPage';
+import { ToastHost } from './components/common/ToastHost';
 import { useChatStore } from './store/chat-store';
 import { useAuthStore } from './store/auth-store';
 import { getWSClient } from './services/ws-client';
@@ -71,22 +72,31 @@ export default function App() {
   // 正在检查登录状态
   if (isChecking) {
     return (
-      <div className="login-page">
-        <div className="login-card">
-          <p style={{ textAlign: 'center', color: '#999' }}>加载中...</p>
+      <>
+        <ToastHost />
+        <div className="login-page">
+          <div className="login-card">
+            <p style={{ textAlign: 'center', color: '#999' }}>加载中...</p>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   // 未登录 → 登录页
   if (!token) {
-    return <LoginPage />;
+    return (
+      <>
+        <ToastHost />
+        <LoginPage />
+      </>
+    );
   }
 
   // 已登录 → 聊天界面
   return (
     <>
+      <ToastHost />
       <AppLayout />
       <div
         id="previewOverlay"

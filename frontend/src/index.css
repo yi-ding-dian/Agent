@@ -4414,3 +4414,70 @@ a:hover {
     border-color: transparent;
   }
 }
+
+/* ─── 全局 Toast 提示（鼠标右侧、自动淡出） ─── */
+.toast-host {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10000;
+}
+
+.toast-item {
+  position: fixed;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px 10px 10px;
+  border-radius: 8px;
+  /* 半透明毛玻璃底（随主题）+ 极淡投影：可读但不遮内容 */
+  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.5;
+  pointer-events: auto;
+  cursor: pointer;
+  animation: toast-in 0.18s ease-out;
+}
+
+.toast-item.leaving {
+  animation: toast-out 0.3s ease forwards;
+}
+
+.toast-icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  margin-top: 1px;
+}
+
+.toast-item.success .toast-icon { background: #34c759; }
+.toast-item.error .toast-icon { background: #ff5f57; }
+.toast-item.info .toast-icon { background: #4da3ff; }
+
+.toast-message {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  word-break: break-all;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes toast-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(-8px); }
+}

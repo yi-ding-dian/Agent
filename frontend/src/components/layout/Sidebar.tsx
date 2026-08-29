@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useChatStore } from '../../store/chat-store';
 import { useAuthStore } from '../../store/auth-store';
+import { toast } from '../../store/toast-store';
 import type { SessionInfo } from '../../types/chat';
 import { exportSession, importSession } from '../../services/api';
 import { isElectron } from '../../services/api-config';
@@ -255,13 +256,13 @@ export function Sidebar() {
   const handleExport = async () => {
     if (!activeSessionId) return;
     if (isElectron()) {
-      alert('Electron 客户端暂不支持会话导出（服务端模式可用）');
+      toast.info('Electron 客户端暂不支持会话导出（服务端模式可用）');
       return;
     }
     try {
       await exportSession(activeSessionId);
     } catch (e: any) {
-      alert(e?.message || '导出失败');
+      toast.error(e?.message || '导出失败');
     }
   };
 
@@ -269,7 +270,7 @@ export function Sidebar() {
 
   const handleImportClick = () => {
     if (isElectron()) {
-      alert('Electron 客户端暂不支持会话导入（服务端模式可用）');
+      toast.info('Electron 客户端暂不支持会话导入（服务端模式可用）');
       return;
     }
     fileInputRef.current?.click();
@@ -280,7 +281,7 @@ export function Sidebar() {
     e.target.value = ''; // 允许重复选择同一文件
     if (!file) return;
     if (isElectron()) {
-      alert('Electron 客户端暂不支持会话导入（服务端模式可用）');
+      toast.info('Electron 客户端暂不支持会话导入（服务端模式可用）');
       return;
     }
     try {
@@ -290,7 +291,7 @@ export function Sidebar() {
       await loadSessions();
       await switchSession(session.id);
     } catch (err: any) {
-      alert(err?.message || '导入失败');
+      toast.error(err?.message || '导入失败');
     }
   };
 

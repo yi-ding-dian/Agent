@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useChatStore } from '../../store/chat-store';
 import { useAuthStore } from '../../store/auth-store';
-import type { AdvancedConfig, ConfigData, ExtensionInfo, McpServerConfig, ToolPermissionValue } from '../../types/api';
+import { toast } from '../../store/toast-store';
+import type { AdvancedConfig, ConfigData, ExtensionInfo, ExternalServiceEntry, McpServerConfig, ToolPermissionValue } from '../../types/api';
 import * as api from '../../services/api';
 import {
   getModelPresets,
@@ -174,31 +175,28 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   // 跨会话记忆（第 6 个 tab：记忆管理）
   const [memoryText, setMemoryText] = useState('');
   const [memorySaving, setMemorySaving] = useState(false);
-  const [memoryStatus, setMemoryStatus] = useState<{ ok: boolean; msg: string } | null>(null);
   const [memoryDistilling, setMemoryDistilling] = useState(false);
   // MCP 外部 server（第 9 个 tab：MCP 服务）
   const [mcpServers, setMcpServers] = useState<McpServerConfig[]>([]);
   const [mcpForm, setMcpForm] = useState({ name: '', command: '', args: '', description: '' });
-  const [mcpStatus, setMcpStatus] = useState<{ ok: boolean; msg: string } | null>(null);
   const [mcpSaving, setMcpSaving] = useState(false);
   // 扩展（第 10 个 tab：扩展管理）
   const [extensions, setExtensions] = useState<ExtensionInfo[]>([]);
-  const [extensionsStatus, setExtensionsStatus] = useState<{ ok: boolean; msg: string } | null>(null);
   const [extensionsLoading, setExtensionsLoading] = useState(false);
   // 外部服务（第 11 个 tab：知识库查询链接）
-  const [extUrl, setExtUrl] = useState('');
-  const [extFilesysUrl, setExtFilesysUrl] = useState('');
-  const [extStatus, setExtStatus] = useState<{ ok: boolean; msg: string } | null>(null);
-  // null = 空闲；'kb' / 'filesys' = 对应链接正在测试
-  const [extTesting, setExtTesting] = useState<'kb' | 'filesys' | null>(null);
+  const [extServices, setExtServices] = useState<ExternalServiceEntry[]>([]);
+  // null = 空闲；'kb' / 'filesys' / 自定义条目 id = 对应链接正在测试
+  const [extTesting, setExtTesting] = useState<string | null>(null);
   const [extSaving, setExtSaving] = useState(false);
+  // 新增服务弹窗
+  const [showServiceModal, setShowServiceModal] = useState(false);
+  const [newService, setNewService] = useState({ title: '', url: '', description: '' });
   // 模型预设（localStorage；选中项会同步 POST /api/global-model 持久化到服务端作为该用户的
   // 全局默认模型 —— 后端创建会话时 modelOverrides 与全局默认都无才报错）
   const [presets, setPresets] = useState<ModelPreset[]>(() => getModelPresets());
   const [activePreset, setActivePreset] = useState<string | null>(() => getActivePresetName());
   const [editingPreset, setEditingPreset] = useState<{ index: number | 'new'; name: string; baseUrl: string; model: string; apiKey: string; maxTokens: number } | null>(null);
   const [presetTesting, setPresetTesting] = useState(false);
-  const [presetTestResult, setPresetTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [avatar, setAvatar] = useState<string>(() => localStorage.getItem('myagent_avatar') || '');
   const user = useAuthStore((s) => s.user);
   // 服务端全局默认模型（模型设置选中项同步而来；常规 tab「当前模型」展示用）
@@ -242,31 +240,28 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   // 切换到记忆管理 tab 时加载当前记忆全文
   useEffect(() => {
     if (tab === 'memory') {
-      setMemoryStatus(null);
       api.getMemory()
         .then((d) => setMemoryText(d.content || ''))
-        .catch((e: any) => setMemoryStatus({ ok: false, msg: e.message }));
+        .catch((e: any) => toast.error(e.message));
     }
   }, [tab]);
 
   // 切换到 MCP 服务 tab 时加载 server 列表
   useEffect(() => {
     if (tab === 'mcp') {
-      setMcpStatus(null);
       api.listMcpServers()
         .then((d) => setMcpServers(d.servers || []))
-        .catch((e: any) => setMcpStatus({ ok: false, msg: e.message }));
+        .catch((e: any) => toast.error(e.message));
     }
   }, [tab]);
 
   // 切换到扩展 tab 时加载扩展列表
   useEffect(() => {
     if (tab === 'extensions') {
-      setExtensionsStatus(null);
       setExtensionsLoading(true);
       api.listExtensions()
         .then((list) => setExtensions(list))
-        .catch((e: any) => setExtensionsStatus({ ok: false, msg: e.message || '加载扩展列表失败' }))
+        .catch((e: any) => toast.error(e.message || '加载扩展列表失败'))
         .finally(() => setExtensionsLoading(false));
     }
   }, [tab]);
@@ -274,13 +269,9 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   // 切换到外部服务 tab 时加载当前配置
   useEffect(() => {
     if (tab === 'external') {
-      setExtStatus(null);
       api.getExternalService()
-        .then((d) => {
-          setExtUrl(d.kbQueryUrl || '');
-          setExtFilesysUrl(d.filesysUrl || '');
-        })
-        .catch((e: any) => setExtStatus({ ok: false, msg: e.message }));
+        .then((d) => setExtServices(d.services || []))
+        .catch((e: any) => toast.error(e.message));
     }
   }, [tab]);
 
@@ -318,7 +309,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { alert('头像图片不能超过 2MB'); return; }
+    if (file.size > 2 * 1024 * 1024) { toast.error('头像图片不能超过 2MB'); return; }
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = reader.result as string;
@@ -395,34 +386,31 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     const baseUrl = editingPreset.baseUrl.trim();
     const model = editingPreset.model.trim();
     if (!baseUrl || !model) {
-      setPresetTestResult({ ok: false, msg: '请先填写 Base URL 和模型 ID' });
+      toast.error('请先填写 Base URL 和模型 ID');
       return;
     }
     setPresetTesting(true);
-    setPresetTestResult(null);
     try {
       const r = await api.testModelConnection(baseUrl, model, editingPreset.apiKey.trim());
       if (r.ok) {
-        setPresetTestResult({ ok: true, msg: `连接正常（${r.latencyMs}ms）` });
+        toast.success(`连接正常（${r.latencyMs}ms）`);
       } else {
-        setPresetTestResult({ ok: false, msg: r.error || '连接失败' });
+        toast.error(r.error || '连接失败');
       }
     } catch (e: any) {
-      setPresetTestResult({ ok: false, msg: e.message || '连接失败' });
+      toast.error(e.message || '连接失败');
     } finally {
       setPresetTesting(false);
     }
   };
 
   const handleStartAddPreset = () => {
-    setPresetTestResult(null);
     setEditingPreset({ index: 'new', name: '', baseUrl: '', model: '', apiKey: '', maxTokens: 65535 });
   };
 
   const handleStartEditPreset = (index: number) => {
     const p = presets[index];
     if (!p) return;
-    setPresetTestResult(null);
     setEditingPreset({ index, name: p.name, baseUrl: p.baseUrl, model: p.model, apiKey: p.apiKey, maxTokens: p.maxTokens ?? 65535 });
   };
 
@@ -432,11 +420,11 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     const baseUrl = editingPreset.baseUrl.trim();
     const model = editingPreset.model.trim();
     if (!name || !baseUrl || !model) {
-      alert('预设名称、Base URL 和模型为必填项');
+      toast.error('预设名称、Base URL 和模型为必填项');
       return;
     }
     if (presets.some((p, i) => i !== editingPreset.index && p.name.trim().toLowerCase() === name.toLowerCase())) {
-      alert(`预设名称 "${name}" 已存在`);
+      toast.error(`预设名称 "${name}" 已存在`);
       return;
     }
     const apiKey = editingPreset.apiKey.trim();
@@ -474,12 +462,11 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const handleSaveMemory = async (content?: string) => {
     const target = content !== undefined ? content : memoryText;
     setMemorySaving(true);
-    setMemoryStatus(null);
     try {
       await api.saveMemory(target);
-      setMemoryStatus({ ok: true, msg: '记忆已保存，将在下次创建会话时注入' });
+      toast.success('记忆已保存，将在下次创建会话时注入');
     } catch (e: any) {
-      setMemoryStatus({ ok: false, msg: e.message });
+      toast.error(e.message);
     } finally {
       setMemorySaving(false);
     }
@@ -493,22 +480,18 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
   const handleDistillMemory = async () => {
     setMemoryDistilling(true);
-    setMemoryStatus(null);
     try {
       const r = await api.distillMemory();
       if (r.success) {
-        setMemoryStatus({
-          ok: true,
-          msg: `蒸馏完成：${r.distilled} 条记忆 → ${r.result} 条精炼记忆`,
-        });
+        toast.success(`蒸馏完成：${r.distilled} 条记忆 → ${r.result} 条精炼记忆`);
         // 蒸馏成功后重新拉取全文刷新编辑器
         const d = await api.getMemory();
         setMemoryText(d.content || '');
       } else {
-        setMemoryStatus({ ok: false, msg: r.error || '记忆蒸馏失败' });
+        toast.error(r.error || '记忆蒸馏失败');
       }
     } catch (e: any) {
-      setMemoryStatus({ ok: false, msg: e.message });
+      toast.error(e.message);
     } finally {
       setMemoryDistilling(false);
     }
@@ -517,25 +500,23 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   // ─── MCP 外部 server（第 9 个 tab） ───────────────────
 
   const handleMcpToggle = async (srv: McpServerConfig) => {
-    setMcpStatus(null);
     try {
       const cfg = await api.updateMcpServer(srv.name, { enabled: !srv.enabled });
       setMcpServers(cfg.servers || []);
-      setMcpStatus({ ok: true, msg: `已${srv.enabled ? '停用' : '启用'}「${srv.name}」，新建会话生效` });
+      toast.success(`已${srv.enabled ? '停用' : '启用'}「${srv.name}」，新建会话生效`);
     } catch (e: any) {
-      setMcpStatus({ ok: false, msg: e.message });
+      toast.error(e.message);
     }
   };
 
   const handleMcpDelete = async (srv: McpServerConfig) => {
     if (!window.confirm(`确定删除 MCP 服务「${srv.name}」吗？其工具将不再可用。`)) return;
-    setMcpStatus(null);
     try {
       const cfg = await api.deleteMcpServer(srv.name);
       setMcpServers(cfg.servers || []);
-      setMcpStatus({ ok: true, msg: `已删除「${srv.name}」` });
+      toast.success(`已删除「${srv.name}」`);
     } catch (e: any) {
-      setMcpStatus({ ok: false, msg: e.message });
+      toast.error(e.message);
     }
   };
 
@@ -543,11 +524,10 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     const name = mcpForm.name.trim();
     const command = mcpForm.command.trim();
     if (!name || !command) {
-      setMcpStatus({ ok: false, msg: '请填写服务名称和命令' });
+      toast.error('请填写服务名称和命令');
       return;
     }
     setMcpSaving(true);
-    setMcpStatus(null);
     try {
       const args = mcpForm.args
         .split(',')
@@ -561,9 +541,9 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
       });
       setMcpServers(cfg.servers || []);
       setMcpForm({ name: '', command: '', args: '', description: '' });
-      setMcpStatus({ ok: true, msg: `已新增「${name}」，新建会话生效` });
+      toast.success(`已新增「${name}」，新建会话生效`);
     } catch (e: any) {
-      setMcpStatus({ ok: false, msg: e.message });
+      toast.error(e.message);
     } finally {
       setMcpSaving(false);
     }
@@ -572,54 +552,73 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   // ─── 扩展（第 10 个 tab：启停管理） ───
 
   const handleExtensionToggle = async (ext: ExtensionInfo) => {
-    setExtensionsStatus(null);
     try {
       const r = await api.toggleExtension(ext.name);
       // 后端落盘后对新会话即时生效（运行中会话不热更新），本地刷新列表展示新状态
       setExtensions((prev) => prev.map((e) => (e.name === ext.name ? { ...e, enabled: r.enabled } : e)));
-      setExtensionsStatus({ ok: true, msg: `已${r.enabled ? '启用' : '停用'}「${ext.name}」，新会话生效` });
+      toast.success(`已${r.enabled ? '启用' : '停用'}「${ext.name}」，新会话生效`);
     } catch (e: any) {
-      setExtensionsStatus({ ok: false, msg: e.message || '切换失败' });
+      toast.error(e.message || '切换失败');
     }
   };
 
-  // ─── 外部服务（知识库查询链接 + 文件系统查询链接，服务端 data/external-service-config.json） ───
+  // ─── 外部服务（可自定义查询链接列表，服务端 data/external-service-config.json） ───
 
-  const handleExtTest = async (kind: 'kb' | 'filesys') => {
-    if (kind === 'kb' && !extUrl.trim()) {
-      setExtStatus({ ok: false, msg: '请先填写知识库查询链接' });
+  const handleExtTest = async (s: ExternalServiceEntry) => {
+    if (!s.url.trim()) {
+      toast.error(`请先填写「${s.title}」的链接`);
       return;
     }
-    if (kind === 'filesys' && !extFilesysUrl.trim()) {
-      setExtStatus({ ok: false, msg: '请先填写文件系统查询链接' });
-      return;
-    }
-    setExtTesting(kind);
-    setExtStatus(null);
+    setExtTesting(s.id);
     try {
-      const r = kind === 'kb'
-        ? await api.testExternalService({ kbQueryUrl: extUrl.trim() })
-        : await api.testExternalService({ filesysUrl: extFilesysUrl.trim() });
+      const r = await api.testExternalService({ id: s.id, url: s.url.trim() });
       if (r.ok) {
-        setExtStatus({ ok: true, msg: `连接正常（${r.latencyMs}ms）` });
+        toast.success(`${s.title} 连接成功（${r.latencyMs}ms）`);
       } else {
-        setExtStatus({ ok: false, msg: r.error || '连接失败' });
+        toast.error(`${s.title}：${r.error || '连接失败'}`);
       }
     } catch (e: any) {
-      setExtStatus({ ok: false, msg: e.message });
+      toast.error(e.message);
     } finally {
       setExtTesting(null);
     }
   };
 
+  const handleExtDelete = (index: number) => {
+    const s = extServices[index];
+    if (!s) return;
+    if (!window.confirm(`删除外部服务「${s.title}」？${s.id === 'kb' ? '（知识库查询将变为未配置）' : s.id === 'filesys' ? '（文件系统查询将变为未配置）' : ''}`)) return;
+    setExtServices((prev) => prev.filter((_, i) => i !== index));
+    toast.info(`已删除「${s.title}」`);
+  };
+
+  const handleAddService = () => {
+    const title = newService.title.trim();
+    const url = newService.url.trim();
+    if (!title) {
+      toast.error('请填写服务标题');
+      return;
+    }
+    if (!url) {
+      toast.error('请填写服务链接');
+      return;
+    }
+    // 新条目不带 id（后端保存时按标题匹配置内置 id 或分配 uuid）；临时 key 用时间戳前缀
+    setExtServices((prev) => [...prev, { id: `tmp-${Date.now()}`, title, url, description: newService.description.trim() }]);
+    setShowServiceModal(false);
+    setNewService({ title: '', url: '', description: '' });
+  };
+
   const handleExtSave = async () => {
     setExtSaving(true);
-    setExtStatus(null);
     try {
-      await api.saveExternalService({ kbQueryUrl: extUrl.trim(), filesysUrl: extFilesysUrl.trim() });
-      setExtStatus({ ok: true, msg: '外部服务配置已保存，立即生效' });
+      // 临时 id（tmp-*）的新条目不发 id，由后端分配；保留后端返回的正式列表
+      const payload = { services: extServices.map((s) => ({ ...s, id: s.id.startsWith('tmp-') ? '' : s.id })) };
+      const saved = await api.saveExternalService(payload);
+      setExtServices(saved.services);
+      toast.success('外部服务配置已保存，立即生效');
     } catch (e: any) {
-      setExtStatus({ ok: false, msg: e.message || '保存失败' });
+      toast.error(e.message || '保存失败');
     } finally {
       setExtSaving(false);
     }
@@ -628,7 +627,6 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   // ─── 高级设置（advanced-config：压缩/子代理/记忆/黑名单/搜索） ───
 
   const [advSaving, setAdvSaving] = useState(false);
-  const [advStatus, setAdvStatus] = useState<{ ok: boolean; msg: string } | null>(null);
 
   const adv = form.advanced ?? DEFAULT_ADVANCED;
 
@@ -657,12 +655,11 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
   const handleSaveAdvanced = async () => {
     setAdvSaving(true);
-    setAdvStatus(null);
     try {
       await api.updateAdvancedConfig(adv);
-      setAdvStatus({ ok: true, msg: '高级设置已保存，立即生效' });
+      toast.success('高级设置已保存，立即生效');
     } catch (e: any) {
-      setAdvStatus({ ok: false, msg: e.message || '保存失败' });
+      toast.error(e.message || '保存失败');
     } finally {
       setAdvSaving(false);
     }
@@ -1107,9 +1104,6 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     </button>
                     <button className="btn btn-secondary" onClick={() => setEditingPreset(null)}>取消</button>
                   </div>
-                  {presetTestResult && (
-                    <div className={`test-result ${presetTestResult.ok ? 'success' : 'error'}`}>{presetTestResult.msg}</div>
-                  )}
                 </div>
               )}
             </>
@@ -1171,11 +1165,6 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 把旧记忆交给 AI 提炼合并，保留关键信息、精简体积；建议记忆接近上限时使用。
                 蒸馏使用 DeepSeek（需配置 DEEPSEEK_API_KEY），失败不影响原记忆。
               </div>
-              {memoryStatus && (
-                <div className={`test-result ${memoryStatus.ok ? 'success' : 'error'}`}>
-                  {memoryStatus.msg}
-                </div>
-              )}
             </>
           )}
 
@@ -1345,9 +1334,6 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   保存成功后立即生效，无需重启服务
                 </span>
               </div>
-              {advStatus && (
-                <div className={`test-result ${advStatus.ok ? 'success' : 'error'}`}>{advStatus.msg}</div>
-              )}
             </>
           )}
 
@@ -1444,9 +1430,6 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   新增/启停后请新建会话使用新工具
                 </span>
               </div>
-              {mcpStatus && (
-                <div className={`test-result ${mcpStatus.ok ? 'success' : 'error'}`}>{mcpStatus.msg}</div>
-              )}
             </>
           )}
 
@@ -1489,70 +1472,96 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   </button>
                 </div>
               ))}
-              {extensionsStatus && (
-                <div className={`test-result ${extensionsStatus.ok ? 'success' : 'error'}`}>
-                  {extensionsStatus.msg}
-                </div>
-              )}
             </>
           )}
 
           {tab === 'external' && (
             <>
               <div className="settings-section-desc">
-                外部服务（知识库 / 文件管理系统）的查询链接；保存后即时生效（无需重启）。
+                外部服务的查询链接（知识库 / 文件管理系统为内置项；支持自定义新增）。保存后即时生效（无需重启）。
               </div>
-              <div className="form-group">
-                <label>知识库查询链接</label>
-                <input
-                  type="text"
-                  value={extUrl}
-                  onChange={(e) => setExtUrl(e.target.value)}
-                  placeholder="http://<知识库服务地址>:8091/ext-query/<id>?token=xxx"
-                />
-                <div className="settings-field-hint">
-                  从知识库服务获取的查询链接（需含 id 与 token）；留空保存可清除配置。
+              {extServices.map((s, i) => (
+                <div key={s.id} className="preset-item" style={{ marginBottom: 8 }}>
+                  <div className="preset-info" style={{ flex: 1, minWidth: 0 }}>
+                    <div className="preset-name">
+                      {s.title}
+                      {(s.id === 'kb' || s.id === 'filesys') && <span className="model-default-badge">内置</span>}
+                    </div>
+                    <div className="preset-meta" style={{ wordBreak: 'break-all' }}>{s.url || '未配置链接'}</div>
+                    {s.description && (
+                      <div className="settings-field-hint" style={{ marginTop: 2 }}>{s.description}</div>
+                    )}
+                  </div>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => handleExtTest(s)}
+                    disabled={extTesting !== null}
+                    style={{ marginLeft: 8 }}
+                  >
+                    {extTesting === s.id ? '测试中...' : '测试连接'}
+                  </button>
+                  <button
+                    className="btn btn-danger btn-sm"
+                    onClick={() => handleExtDelete(i)}
+                    style={{ marginLeft: 8 }}
+                  >
+                    删除
+                  </button>
                 </div>
-                <button
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => handleExtTest('kb')}
-                  disabled={extTesting !== null}
-                  style={{ marginTop: 4 }}
-                >
-                  {extTesting === 'kb' ? '测试中...' : '测试连接'}
-                </button>
-              </div>
-              <div className="form-group">
-                <label>文件系统查询链接</label>
-                <input
-                  type="text"
-                  value={extFilesysUrl}
-                  onChange={(e) => setExtFilesysUrl(e.target.value)}
-                  placeholder="http://<文件系统地址>:5001?token=sk-xxx"
-                />
-                <div className="settings-field-hint">
-                  个人文件管理系统查询链接：地址与 API Token 合成一条（支持 ?token=sk-xxx 或
-                  http://host:port/sk-xxx 形式）；留空保存可清除配置。
-                </div>
-                <button
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => handleExtTest('filesys')}
-                  disabled={extTesting !== null}
-                  style={{ marginTop: 4 }}
-                >
-                  {extTesting === 'filesys' ? '测试中...' : '测试连接'}
-                </button>
-              </div>
+              ))}
+              <button className="btn btn-secondary" onClick={() => setShowServiceModal(true)} style={{ marginBottom: 12 }}>
+                + 新增服务
+              </button>
               <div className="memory-actions">
                 <button className="btn btn-primary" onClick={handleExtSave} disabled={extSaving}>
                   {extSaving ? '保存中...' : '保存'}
                 </button>
                 <span className="settings-field-hint" style={{ alignSelf: 'center', marginLeft: 12 }}>
-                  保存成功后立即生效，无需重启服务
+                  保存成功后立即生效，无需重启服务；测试连接验证当前填写内容
                 </span>
               </div>
-              {extStatus && (
-                <div className={`test-result ${extStatus.ok ? 'success' : 'error'}`}>{extStatus.msg}</div>
+              {showServiceModal && (
+                <div className="modal-overlay" onClick={() => setShowServiceModal(false)}>
+                  <div className="modal" style={{ width: 480 }} onClick={(e) => e.stopPropagation()}>
+                    <div className="modal-header">
+                      <h2>新增外部服务</h2>
+                      <button className="modal-close-btn" onClick={() => setShowServiceModal(false)}>&#10005;</button>
+                    </div>
+                    <div style={{ padding: '16px 20px' }}>
+                      <div className="form-group">
+                        <label>标题</label>
+                        <input
+                          type="text"
+                          value={newService.title}
+                          onChange={(e) => setNewService({ ...newService, title: e.target.value })}
+                          placeholder="如：企业知识库 / 内网文档"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>链接</label>
+                        <input
+                          type="text"
+                          value={newService.url}
+                          onChange={(e) => setNewService({ ...newService, url: e.target.value })}
+                          placeholder="http://host:port?token=xxx"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>描述（可选）</label>
+                        <textarea
+                          rows={2}
+                          value={newService.description}
+                          onChange={(e) => setNewService({ ...newService, description: e.target.value })}
+                          placeholder="这个服务是做什么的，怎么使用"
+                        />
+                      </div>
+                      <div className="preset-editor-actions">
+                        <button className="btn btn-primary" onClick={handleAddService}>添加</button>
+                        <button className="btn btn-secondary" onClick={() => setShowServiceModal(false)}>取消</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               )}
             </>
           )}
