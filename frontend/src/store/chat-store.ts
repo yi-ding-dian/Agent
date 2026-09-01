@@ -5,6 +5,7 @@ import type { ConfigData } from '../types/api';
 import { fetchSSE } from '../services/sse-client';
 import { getLlmOverrides, apiUrl, isElectron } from '../services/api-config';
 import { getWSClient, type WSStatus } from '../services/ws-client';
+import { confirmDialog } from './confirm-dialog';
 import * as api from '../services/api';
 
 interface ConfirmationRequest {
@@ -384,6 +385,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     } catch { /* ignore */ }
   },
   deleteMessagePair: async (assistantMsgId) => {
+    // 统一二次确认（全项目删除操作均确认）
+    const confirmed = await confirmDialog.confirm({
+      title: '删除回复',
+      message: '删除这条回复及其提问？此操作不可恢复。',
+      danger: true,
+      confirmLabel: '删除',
+    });
+    if (confirmed !== 'confirm') return;
     const { messages, activeSessionId } = get();
     // Electron 模式：消息由主进程引擎管理，无服务端 API，保持本地删除
     if (isElectron()) {

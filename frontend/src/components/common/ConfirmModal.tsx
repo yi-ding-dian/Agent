@@ -34,35 +34,56 @@ export function ConfirmModal(props: {
   secondaryCmd?: string;
   /** 弹窗宽度（默认 440） */
   width?: number;
+  /** 弹窗出现的屏幕坐标（默认居中）；提供时在鼠标位置附近弹出（视口内自动收边） */
+  pos?: { x: number; y: number };
   onConfirm: () => void;
   onCancel: () => void;
   onSecondary?: () => void;
 }) {
+  const pos = props.pos;
+  // 宽度自适应：未显式指定 width 时按内容估算（11px/字密集口径 + 边距，短消息是紧凑窄框；上限 400）
+  const textLen =
+    (typeof props.title === 'string' ? props.title.length : 0) +
+    (typeof props.message === 'string' ? props.message.length : 0);
+  const width = props.width ?? Math.round(Math.max(280, Math.min(textLen * 11 + 60, 400)));
+  const minWidth = Math.min(420, width);
+  // 视口内收边（弹窗宽约 width、高约 180 的保守估算）
+  const fixedStyle = pos
+    ? {
+        position: 'fixed' as const,
+        left: Math.max(8, Math.min(pos.x + 16, window.innerWidth - width - 16)),
+        top: Math.max(8, Math.min(pos.y + 12, window.innerHeight - 200)),
+        width: Math.min(width, window.innerWidth - 16),
+      }
+    : undefined;
+
   return (
     <div className="modal-overlay" onClick={props.onCancel}>
-      <ResizableModal width={props.width ?? 440} minWidth={420} onEsc={props.onCancel}>
-        <h3 style={{ padding: '18px 24px 0', fontSize: 16 }}>{props.title}</h3>
-        <div className="body" style={{ whiteSpace: 'pre-wrap', paddingTop: 10 }}>{props.message}</div>
-        <div className="foot">
-          {!props.hideCancel && <button onClick={props.onCancel}>取消</button>}
-          {props.secondaryLabel && props.onSecondary && (
+      <div style={{ ...fixedStyle, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <ResizableModal width={width} minWidth={minWidth} onEsc={props.onCancel}>
+          <h3 style={{ padding: '18px 24px 0', fontSize: 16 }}>{props.title}</h3>
+          <div className="body" style={{ whiteSpace: 'pre-wrap', paddingTop: 10 }}>{props.message}</div>
+          <div className="foot">
+            {!props.hideCancel && <button onClick={props.onCancel}>取消</button>}
+            {props.secondaryLabel && props.onSecondary && (
+              <button
+                className={props.secondaryDanger ? 'btn-danger' : 'btn-primary'}
+                onClick={props.onSecondary}
+                title={props.secondaryCmd ? `${props.secondaryCmd}` : undefined}
+              >
+                {props.secondaryLabel}
+              </button>
+            )}
             <button
-              className={props.secondaryDanger ? 'btn-danger' : 'btn-primary'}
-              onClick={props.onSecondary}
-              title={props.secondaryCmd ? `${props.secondaryCmd}` : undefined}
+              className={props.danger ? 'btn-danger' : 'btn-primary'}
+              onClick={props.onConfirm}
+              title={props.confirmCmd ? `${props.confirmCmd}` : undefined}
             >
-              {props.secondaryLabel}
+              {props.confirmLabel ?? '确认'}
             </button>
-          )}
-          <button
-            className={props.danger ? 'btn-danger' : 'btn-primary'}
-            onClick={props.onConfirm}
-            title={props.confirmCmd ? `${props.confirmCmd}` : undefined}
-          >
-            {props.confirmLabel ?? '确认'}
-          </button>
-        </div>
-      </ResizableModal>
+          </div>
+        </ResizableModal>
+      </div>
     </div>
   );
 }

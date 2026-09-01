@@ -22,6 +22,7 @@ export function ConfirmDialogHost() {
       secondaryDanger={request.secondaryDanger}
       hideCancel={request.hideCancel}
       width={request.width}
+      pos={request.pos}
       onConfirm={() => resolve(request.id, 'confirm')}
       onCancel={() => resolve(request.id, 'cancel')}
       onSecondary={request.secondaryLabel ? () => resolve(request.id, 'secondary') : undefined}

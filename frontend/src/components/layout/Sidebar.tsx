@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useChatStore } from '../../store/chat-store';
 import { useAuthStore } from '../../store/auth-store';
 import { toast } from '../../store/toast-store';
+import { confirmDialog } from '../../store/confirm-dialog';
 import type { SessionInfo } from '../../types/chat';
 import { exportSession, importSession } from '../../services/api';
 import { isElectron } from '../../services/api-config';
@@ -99,6 +100,18 @@ function SessionItem({
     });
   };
 
+  /** 删除会话：先二次确认（弹窗在鼠标旁），确认后再播放飞出丢弃动画；
+      动画结束后由 startDelete 内部回调真正删除（不另加确认，防双重弹窗） */
+  const handleDeleteClick = async () => {
+    const r = await confirmDialog.confirm({
+      title: '删除会话',
+      message: `删除会话「${session.name}」？此操作不可恢复。`,
+      danger: true,
+      confirmLabel: '删除',
+    });
+    if (r === 'confirm') startDelete();
+  };
+
   useEffect(() => {
     if (editing) {
       inputRef.current?.focus();
@@ -173,7 +186,7 @@ function SessionItem({
         className="session-item-delete"
         onClick={(e) => {
           e.stopPropagation();
-          startDelete(); // 列表项让位 + body 级飞行体动画，结束后真正删除
+          void handleDeleteClick();
         }}
         title="删除会话"
       >

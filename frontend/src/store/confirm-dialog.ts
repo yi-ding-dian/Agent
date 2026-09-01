@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { getLastMouse } from '../utils/mouse-position';
 
 /**
  * 全局确认弹窗通道（Promise 风格，替代 window.confirm）
@@ -32,6 +33,8 @@ export interface ConfirmRequest {
   hideCancel?: boolean;
   /** 弹窗宽度（默认 440） */
   width?: number;
+  /** 弹窗出现的屏幕坐标（默认取鼠标位置，跟随鼠标弹出） */
+  pos?: { x: number; y: number };
 }
 
 interface ConfirmStore {
@@ -53,7 +56,7 @@ export const useConfirmStore = create<ConfirmStore>((set) => ({
     }
     return new Promise<ConfirmResult>((resolve) => {
       pendingResolver = resolve;
-      set({ request: { ...req, id: ++seq } });
+      set({ request: { ...req, id: ++seq, pos: req.pos ?? getLastMouse() ?? undefined } });
     });
   },
   resolve: (id, result) => {

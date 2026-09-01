@@ -192,9 +192,11 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   // null = 空闲；'kb' / 'filesys' / 自定义条目 id = 对应链接正在测试
   const [extTesting, setExtTesting] = useState<string | null>(null);
   const [extSaving, setExtSaving] = useState(false);
-  // 新增服务弹窗
+  // 外部服务新增/编辑弹窗
   const [showServiceModal, setShowServiceModal] = useState(false);
   const [newService, setNewService] = useState({ title: '', url: '', description: '' });
+  /** null = 新增模式；否则为编辑的外部队列索引 */
+  const [editingServiceIndex, setEditingServiceIndex] = useState<number | null>(null);
   // 模型预设（localStorage；选中项会同步 POST /api/global-model 持久化到服务端作为该用户的
   // 全局默认模型 —— 后端创建会话时 modelOverrides 与全局默认都无才报错）
   const [presets, setPresets] = useState<ModelPreset[]>(() => getModelPresets());
@@ -626,21 +628,45 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     }
   };
 
-  const handleExtDelete = async (index: number) => {
+  /** 删除外部服务（二次确认；返回是否真的删除）；供行内与编辑弹窗共用 */
+  const handleExtDelete = async (index: number): Promise<boolean> => {
     const s = extServices[index];
-    if (!s) return;
+    if (!s) return false;
     const r = await confirmDialog.confirm({
       title: '删除外部服务',
       message: `删除外部服务「${s.title}」？${s.id === 'kb' ? '（知识库查询将变为未配置）' : s.id === 'filesys' ? '（文件系统查询将变为未配置）' : ''}`,
       danger: true,
       confirmLabel: '删除',
     });
-    if (r !== 'confirm') return;
+    if (r !== 'confirm') return false;
     setExtServices((prev) => prev.filter((_, i) => i !== index));
     toast.info(`已删除「${s.title}」`);
+    return true;
   };
 
-  const handleAddService = () => {
+  /** 关闭弹窗并重置编辑态 */
+  const handleCloseServiceModal = () => {
+    setShowServiceModal(false);
+    setEditingServiceIndex(null);
+    setNewService({ title: '', url: '', description: '' });
+  };
+
+  const handleOpenAddService = () => {
+    setEditingServiceIndex(null);
+    setNewService({ title: '', url: '', description: '' });
+    setShowServiceModal(true);
+  };
+
+  const handleOpenEditService = (index: number) => {
+    const s = extServices[index];
+    if (!s) return;
+    setEditingServiceIndex(index);
+    setNewService({ title: s.title, url: s.url, description: s.description });
+    setShowServiceModal(true);
+  };
+
+  /** 弹窗保存：编辑模式更新对应条目，新增模式追加（无 id 由后端分配） */
+  const handleSaveServiceModal = () => {
     const title = newService.title.trim();
     const url = newService.url.trim();
     if (!title) {
@@ -651,10 +677,21 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
       toast.error('请填写服务链接');
       return;
     }
-    // 新条目不带 id（后端保存时按标题匹配置内置 id 或分配 uuid）；临时 key 用时间戳前缀
-    setExtServices((prev) => [...prev, { id: `tmp-${Date.now()}`, title, url, description: newService.description.trim() }]);
-    setShowServiceModal(false);
-    setNewService({ title: '', url: '', description: '' });
+    const description = newService.description.trim();
+    if (editingServiceIndex !== null) {
+      setExtServices((prev) => prev.map((s, i) => (i === editingServiceIndex ? { ...s, title, url, description } : s)));
+    } else {
+      // 新条目不带 id（后端保存时按标题匹配置内置 id 或分配 uuid）；临时 key 用时间戳前缀
+      setExtServices((prev) => [...prev, { id: `tmp-${Date.now()}`, title, url, description }]);
+    }
+    handleCloseServiceModal();
+  };
+
+  /** 编辑弹窗内删除：二次确认成功后关闭弹窗 */
+  const handleDeleteFromServiceModal = async () => {
+    if (editingServiceIndex === null) return;
+    const deleted = await handleExtDelete(editingServiceIndex);
+    if (deleted) handleCloseServiceModal();
   };
 
   const handleExtSave = async () => {
@@ -1567,25 +1604,25 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     {extTesting === s.id ? '测试中...' : '测试连接'}
                   </button>
                   <button
-                    className="btn btn-danger btn-sm"
-                    onClick={() => handleExtDelete(i)}
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => handleOpenEditService(i)}
                     style={{ marginLeft: 8 }}
                   >
-                    删除
+                    编辑
                   </button>
                 </div>
               ))}
-              <button className="btn btn-secondary" onClick={() => setShowServiceModal(true)} style={{ marginBottom: 12 }}>
+              <button className="btn btn-secondary" onClick={handleOpenAddService} style={{ marginBottom: 12 }}>
                 + 新增服务
               </button>
               {showServiceModal && (
-                <div className="modal-overlay" onClick={() => setShowServiceModal(false)}>
-                  <ResizableModal width={480} onEsc={() => setShowServiceModal(false)}>
+                <div className="modal-overlay" onClick={handleCloseServiceModal}>
+                  <ResizableModal width={480} onEsc={handleCloseServiceModal}>
                     <div className="modal-header">
-                      <h2>新增外部服务</h2>
-                      <button className="modal-close-btn" onClick={() => setShowServiceModal(false)}>&#10005;</button>
+                      <h2>{editingServiceIndex !== null ? '编辑外部服务' : '新增外部服务'}</h2>
+                      <button className="modal-close-btn" onClick={handleCloseServiceModal}>&#10005;</button>
                     </div>
-                    <div style={{ padding: '16px 20px' }}>
+                    <div className="body" style={{ paddingTop: 12 }}>
                       <div className="form-group">
                         <label>标题</label>
                         <input
@@ -1613,10 +1650,17 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                           placeholder="这个服务是做什么的，怎么使用"
                         />
                       </div>
-                      <div className="preset-editor-actions">
-                        <button className="btn btn-primary" onClick={handleAddService}>添加</button>
-                        <button className="btn btn-secondary" onClick={() => setShowServiceModal(false)}>取消</button>
-                      </div>
+                    </div>
+                    <div className="foot">
+                      {editingServiceIndex !== null && (
+                        <button className="btn btn-danger" onClick={() => void handleDeleteFromServiceModal()} style={{ marginRight: 'auto' }}>
+                          删除
+                        </button>
+                      )}
+                      <button className="btn btn-secondary" onClick={handleCloseServiceModal}>取消</button>
+                      <button className="btn btn-primary" onClick={handleSaveServiceModal}>
+                        {editingServiceIndex !== null ? '保存修改' : '添加'}
+                      </button>
                     </div>
                   </ResizableModal>
                 </div>

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { getLastMouse } from '../utils/mouse-position';
 
 /**
  * 全局 toast 提示 store（轻量自实现，零新增依赖）
@@ -30,22 +31,6 @@ const MAX_VISIBLE = 3;
 const SHOW_MS = 1500; // 显示时长（之后进入淡出动画）
 const EXIT_MS = 300; // 淡出动画时长
 
-/** 模块级最后鼠标位置（默认取用；null = 从未有真实坐标，兜底右下角） */
-let lastMouse: { x: number; y: number } | null = null;
-
-// 模块加载即挂监听（而非 show 首次惰性挂载）：否则首次 toast 拿到初始 (0,0)，
-// 弹出到屏幕左上角；第二次鼠标动过才正常。
-// click 也作为位置信号：键盘触发（Enter/Tab 高亮后 Enter）时 mousemove 可能没跟着动。
-if (typeof window !== 'undefined') {
-  window.addEventListener('mousemove', (e) => {
-    lastMouse = { x: e.clientX, y: e.clientY };
-  });
-  window.addEventListener('click', (e) => {
-    // 键盘触发的 click 坐标为 (0,0)，不更新
-    if (e.clientX !== 0 || e.clientY !== 0) lastMouse = { x: e.clientX, y: e.clientY };
-  });
-}
-
 interface ToastStore {
   toasts: ToastItem[];
   show: (type: ToastType, message: string, pos?: { x: number; y: number }) => void;
@@ -58,8 +43,8 @@ export const useToastStore = create<ToastStore>((set, get) => ({
   toasts: [],
 
   show: (type, message, pos) => {
-    // 默认取系统内屏右下角附近（无任何鼠标位置信号时的兜底，避免弹出到左上角）
-    const p = pos ?? lastMouse ?? { x: window.innerWidth - 380, y: window.innerHeight - 120 };
+    // 默认取鼠标位置；无任何鼠标信号时兜底屏内右下角附近（避免弹出到左上角）
+    const p = pos ?? getLastMouse() ?? { x: window.innerWidth - 380, y: window.innerHeight - 120 };
     const id = Date.now() + Math.floor(Math.random() * 100000);
 
     set((s) => {
