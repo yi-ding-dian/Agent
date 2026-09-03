@@ -24,7 +24,8 @@
 - **工具权限门控**：allow / ask / deny 三级权限，危险命令弹窗确认，路径穿越防护
 - **11 个内置工具**：文件读写/编辑、grep、目录浏览、Shell 执行、Python 执行、网络搜索、技能、记忆、子代理
 - **技能系统（skills）**：`.pi/skills/` 技能定义随会话注入，模型按需加载
-- **MCP 与扩展体系**：内置 MCP 桥接（如 Tavily 搜索），扩展工具动态加载启停
+- **MCP 与扩展体系**：内置 MCP server（网络搜索/知识库/文件系统等 8 个工具，stdio 桥接），扩展工具动态加载启停
+- **外部服务可自定义**：知识库 / 文件管理系统 / 自定义查询链接列表，一键测试连接，保存即时生效
 - **会话 JSONL 导入导出**：白名单字段清洗、宽容解析，会话可迁移备份
 - **5 套主题**：深浅色等 5 套主题自由切换
 - **Electron 桌面客户端**：AppImage 一键打包，内置 AgentEngine，独立可用
@@ -107,6 +108,7 @@ cd frontend && npm run build    # 前端产物 frontend/dist/
 | `rate-limit-config.json` | 限流与 Agent 迭代限制 | POST /api/config、前端设置 |
 | `tool-permissions.json` | 工具权限（allow/ask/deny） | POST /api/config、前端「工具权限」tab |
 | `memory.md` | 跨会话记忆 | remember 工具、GET/POST /api/memory、前端「记忆管理」tab |
+| `external-service-config.json` | 外部服务查询链接列表（知识库/文件系统/自定义） | GET/POST /api/external-service、前端「外部服务」tab |
 
 ## 使用
 
@@ -163,6 +165,10 @@ curl -X POST http://localhost:7980/api/sessions/<ID>/abort
 | POST | `/api/test-connection` | 测试模型服务连通性 |
 | POST | `/api/confirm-decision` | 工具调用确认决策（allow / always_allow / block） |
 | GET/POST | `/api/memory` | 读取 / 保存跨会话记忆 |
+| GET/POST | `/api/external-service` | 外部服务设置（知识库 / 文件管理系统 / 自定义查询链接列表） |
+| POST | `/api/external-service/test` | 测试外部服务链接连通性（按条目类型：契约/搜索/通用可达性） |
+| GET | `/api/agent-config/kb-link` \| `/api/agent-config/filesys-link` | 免鉴权契约：按内置 id 返回外部服务链接（供 MCP 工具进程读取） |
+| GET/POST/PUT/DELETE | `/api/mcp-servers` | MCP 服务管理（列表 / 新增 / 修改 / 删除，落盘 `data/mcp-servers.json`） |
 | GET | `/api/list-directory` | 目录浏览（设置页工作目录选择用） |
 | GET | `/api/extensions` | 扩展列表（含发现未启用的） |
 | POST | `/api/extensions/:name/toggle` | 扩展启停（落盘，新会话生效） |

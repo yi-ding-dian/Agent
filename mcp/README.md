@@ -12,7 +12,10 @@
 │   │   ├── index.js          #   聚合注册
 │   │   ├── calculator.js     #   四则运算
 │   │   ├── time.js           #   日期时间查询
-│   │   └── echo.js           #   消息回显
+│   │   ├── echo.js           #   消息回显
+│   │   ├── webSearch.js      #   网络搜索
+│   │   ├── kbQuery.js        #   知识库查询
+│   │   └── fileQuery.js      #   个人文件系统（搜索/读取/下载）
 │   ├── resources/            # 资源模块 📄
 │   │   ├── index.js          #   聚合注册
 │   │   └── system.js         #   操作系统/硬件信息
@@ -62,11 +65,20 @@ node client/test-client.js
 
 ### 工具（Tools）
 
-| 工具名       | 功能说明                    | 参数                                         |
-| ------------ | --------------------------- | -------------------------------------------- |
-| `calculator` | 加减乘除四则运算            | `a`, `b`, `operation`                        |
-| `get_time`   | 获取当前时间或转换时间戳    | `timestamp?`, `format?` (iso/locale/unix)    |
-| `echo`       | 回传消息                    | `message`, `upper?`                          |
+| 工具名         | 功能说明                       | 参数                                                  |
+| -------------- | ------------------------------ | ----------------------------------------------------- |
+| `calculator`   | 加减乘除四则运算               | `a`, `b`, `operation`                                 |
+| `get_time`     | 获取当前时间或转换时间戳       | `timestamp?`, `format?` (iso/locale/unix)             |
+| `echo`         | 回传消息                       | `message`, `upper?`                                   |
+| `web_search`   | 网络搜索（内置实现）           | `query`, `max_results?`                               |
+| `kb_query`     | 查询企业知识库                 | `query`, `top_k?`                                     |
+| `file_search`  | 个人文件系统语义搜索           | `query`, `top_k?`                                     |
+| `file_read`    | 读取文件系统中的文本内容       | `file_id`                                             |
+| `file_download`| 下载文件到本地磁盘（~/Downloads） | `file_id`, `save_path?`                            |
+
+> 配置来源：`kb_query` 经 `GET /api/agent-config/kb-link`、`file_*` 经 `GET /api/agent-config/filesys-link`
+> 从 Agent 后端读取（界面「设置 → 外部服务」填写，`AGENT_CONFIG_BASE_URL` 指向后端）；也兼容
+> `KB_QUERY_LINK` / `FILESYS_URL`（或 `FILESYS_BASE_URL` + `FILESYS_API_TOKEN`）环境变量直接注入。
 
 ### 资源（Resources）
 
