@@ -106,6 +106,8 @@ export function AgentDetailModal({ agent, index, onClose }: AgentDetailModalProp
   const thinkingOpen = thinkingExpanded || (agent.status === 'running' && !!thinkingBuffer);
 
   const bodyRef = useRef<HTMLDivElement>(null);
+  /** 思考块内部滚动容器（.thinking-content 有 max-height，是独立滚动区） */
+  const thinkingRef = useRef<HTMLDivElement>(null);
 
   /**
    * 用户是否手动滚离了底部。
@@ -114,13 +116,31 @@ export function AgentDetailModal({ agent, index, onClose }: AgentDetailModalProp
    * scrollTop 停在 0，位置判断会得出"远离底部"从而永不跟随 —— 这正是首版实现的 bug。
    */
   const userScrolledAwayRef = useRef(false);
+  /** 思考块内部的「用户手动上翻」标记，与外层各自独立 */
+  const thinkingScrolledAwayRef = useRef(false);
 
-  /** 流式输出时跟随到底部；用户手动上翻后暂停，滚回底部自动恢复 */
+  // 切换查看的子 Agent 时重置跟随状态（弹窗通常整体挂载/卸载，此处兜底）
+  useEffect(() => {
+    userScrolledAwayRef.current = false;
+    thinkingScrolledAwayRef.current = false;
+  }, [agent.id]);
+
+  /**
+   * 流式输出时跟随到底部；用户手动上翻后暂停，滚回底部自动恢复。
+   *
+   * 依赖 agent.events 而非某几个派生字符串：工具调用的开闭与状态流转同样会改变
+   * 内容高度，漏掉这些维度会让工具阶段完全不跟随（实测外层卡住数秒不动）。
+   *
+   * 必须**同时**滚思考块内层：.agent-detail-body .thinking-content 带
+   * max-height:320px + overflow-y:auto，思考超出 320px 后是在内层撑高、外层
+   * scrollHeight 不变 —— 只滚外层等于什么都没做，这正是「思考不跟随」的根因。
+   */
   useEffect(() => {
     const el = bodyRef.current;
-    if (!el || userScrolledAwayRef.current) return;
-    el.scrollTop = el.scrollHeight;
-  }, [thinkingBuffer, textBuffer]);
+    if (el && !userScrolledAwayRef.current) el.scrollTop = el.scrollHeight;
+    const thinkEl = thinkingRef.current;
+    if (thinkEl && !thinkingScrolledAwayRef.current) thinkEl.scrollTop = thinkEl.scrollHeight;
+  }, [agent.events, thinkingOpen]);
 
   const durationSec = agent.endedAt
     ? Math.max(0, Math.round((agent.endedAt - agent.startedAt) / 1000))
@@ -200,7 +220,16 @@ export function AgentDetailModal({ agent, index, onClose }: AgentDetailModalProp
                 </span>
               </div>
               {thinkingOpen && (
-                <div className="thinking-content">
+                <div
+                  className="thinking-content"
+                  ref={thinkingRef}
+                  onScroll={(e) => {
+                    const el = e.currentTarget;
+                    // 同外层：距底部 80px 内视为「在底部」，滚回底部即恢复自动跟随
+                    thinkingScrolledAwayRef.current =
+                      el.scrollHeight - el.scrollTop - el.clientHeight > 80;
+                  }}
+                >
                   {/* 与主对话一致：思考内容走 Markdown 渲染（此前纯文本直出，代码块/列表会显示成原始标记） */}
                   <MarkdownRenderer content={thinkingBuffer} isStreaming={agent.status === 'running'} />
                 </div>

@@ -160,13 +160,26 @@ function extractTextContent(content: any): string {
  * 注意：实时过程事件流（events）不随消息持久化，重建条目 events 为空且 eventsLost=true，
  * 详情页据此提示"过程未保留"，而非误显示成"没有过程"。
  */
+/**
+ * 剥离主代理传入 task 自带的「任务：」前缀。
+ *
+ * 详情弹窗模板自己会渲染一个「任务：」（AgentDetailModal），而模型给的 task 常自带一个，
+ * 两者叠加会显示成「任务：任务：…」。在数据入口统一剥离，列表项文本 / title、详情、
+ * 魔法飞行动画三处显示即保持一致。
+ */
+function stripTaskPrefix(text: string): string {
+  return text.replace(/^\s*任务\s*[:：]\s*/, '');
+}
+
 function rebuildAgentsFromMessages(messages: ChatMessage[]): AgentInfo[] {
   const agents: AgentInfo[] = [];
   for (const m of messages) {
     for (const tc of m.toolCalls ?? []) {
       if (tc.toolName !== 'subagent') continue;
       const details = (tc.result as any)?.details;
-      const task = typeof (tc.args as any)?.task === 'string' ? (tc.args as any).task : '';
+      const task = stripTaskPrefix(
+        typeof (tc.args as any)?.task === 'string' ? (tc.args as any).task : '',
+      );
       agents.push({
         id: tc.id,
         task,
@@ -456,12 +469,28 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
   deleteSession: async (id) => {
     try {
+      const { activeSessionId } = get();
+      const isActive = activeSessionId === id;
+
+      // 先停后删：会话若仍在跑，删除后 SSE 事件会继续回流 —— tool_start 是「追加」语义
+      // （agents: [...s.agents, newAgent]），会把刚清空的子 Agent 列表重新填回来，消息同理。
+      // 两个 abort 接口均幂等（没在跑时后端返回 stopped=false），故用 allSettled 容错。
+      if (isElectron()) window.myagent!.chatAbort(id).catch(() => {});
+      await Promise.allSettled([api.abortAllSubAgents(id), api.abortSession(id)]);
+      if (isActive) {
+        if (abortController) { abortController.abort(); abortController = null; }
+        getWSClient().send({ type: 'abort', sessionId: id });
+      }
+
       await api.deleteSession(id);
       // Electron 模式：释放主进程引擎会话
       if (isElectron()) window.myagent!.chatDispose(id).catch(() => {});
-      const { activeSessionId } = get();
       set((s) => ({ sessions: s.sessions.filter((sess) => sess.id !== id) }));
-      if (activeSessionId === id) set({ activeSessionId: null, messages: [] });
+      // agents 必须一并清空：子 Agent 列表属于当前会话（刷新后由消息重建），
+      // 会话没了消息也就没了，残留的 agents 会让侧栏「子Agent」tab 显示已删除会话的记录
+      if (isActive) {
+        set({ activeSessionId: null, messages: [], agents: [], isProcessing: false });
+      }
     } catch { /* ignore */ }
   },
   deleteMessagePair: async (assistantMsgId) => {
@@ -906,7 +935,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         // 干活的 Agent：subagent 工具开始执行 → 创建列表项（会话级，切会话清空）+ 触发魔法飞行动画
         if (event.toolName === 'subagent') {
           const rawTask = (event.args as any)?.task;
-          const task = typeof rawTask === 'string' ? rawTask : JSON.stringify(rawTask ?? '');
+          const task = stripTaskPrefix(
+            typeof rawTask === 'string' ? rawTask : JSON.stringify(rawTask ?? ''),
+          );
           const toolCallId = event.toolCallId as string;
           set((s) => ({
             agents: [

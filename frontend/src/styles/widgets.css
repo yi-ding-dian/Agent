@@ -647,25 +647,7 @@
   background: var(--danger-bg);
 }
 
-/* 侧栏 tab 行的「全部停止」（仅当有运行中的子 Agent 时渲染） */
-.side-panel-stop-all {
-  margin-left: auto;
-  padding: 1px 8px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
-  font-size: 10px;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: all var(--transition);
-}
-
-.side-panel-stop-all:hover {
-  color: var(--danger);
-  border-color: var(--danger);
-  background: var(--danger-bg);
-}
+/* 侧栏 tab 行的「全部停止」按钮已移除（用户要求取消）；底层 stopAllSubAgents 能力保留 */
 
 .agent-item-task {
   flex: 1;
