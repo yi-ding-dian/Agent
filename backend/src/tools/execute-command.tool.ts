@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { Type, type Static } from 'typebox';
 import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from '@earendil-works/pi-agent-core';
 import { getAdvancedConfig } from '../config/advanced-config.js';
+import { killProcessGroup } from '../utils/process.js';
 
 /**
  * 最底线内置黑名单（不可被配置移除，始终生效）：
@@ -87,26 +88,30 @@ export function createExecuteCommandTool(workDir: string): AgentTool<typeof Exec
 
         const proc = spawn('sh', ['-c', params.command], {
           cwd,
-          timeout: 60000,
+          // detached: 让 sh 自成进程组组长 —— 中止/超时时才能连带杀掉真正的命令
+          // （直接 kill sh 只会让它死，命令作为其子进程会沦为孤儿继续跑）。
+          // 这里不 unref()，仍由父进程等待其退出。
+          detached: true,
           env: { ...process.env },
         });
 
-        // 兜底超时：防止子进程卡死后 Promise 永远不 resolve
+        // 超时兜底：防止子进程卡死后 Promise 永远不 resolve。
+        // 不再用 spawn 的 timeout 选项 —— 它只给 sh 发信号，同样漏掉进程组。
         const timeoutHandle = setTimeout(() => {
           if (settled) return;
           settled = true;
-          if (!proc.killed) proc.kill('SIGKILL');
+          killProcessGroup(proc, 'SIGKILL');
           resolve({
             content: [{ type: 'text', text: output || '命令执行超时（60秒）' }],
             details: { command: params.command, exitCode: -1, timedOut: true },
           });
-        }, 65000);
+        }, 60000);
 
-        // 连接 AbortSignal：用户点击停止时杀死子进程
+        // 连接 AbortSignal：用户点击停止时杀掉整条命令链
         if (signal) {
           if (signal.aborted) {
             clearTimeout(timeoutHandle);
-            if (!proc.killed) proc.kill('SIGKILL');
+            killProcessGroup(proc, 'SIGKILL');
             resolve({
               content: [{ type: 'text', text: '操作已中止' }],
               details: { command: params.command, exitCode: -1 },
@@ -115,10 +120,11 @@ export function createExecuteCommandTool(workDir: string): AgentTool<typeof Exec
           }
           signal.addEventListener('abort', () => {
             if (settled) return;
-            if (!proc.killed) proc.kill('SIGTERM');
+            killProcessGroup(proc, 'SIGTERM');
             // 如果 SIGTERM 无效，2 秒后强杀
             setTimeout(() => {
-              if (!proc.killed) proc.kill('SIGKILL');
+              if (settled) return;
+              killProcessGroup(proc, 'SIGKILL');
             }, 2000).unref();
           }, { once: true });
         }

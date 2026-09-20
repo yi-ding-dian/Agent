@@ -4,6 +4,7 @@ import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { Type, type Static } from 'typebox';
 import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from '@earendil-works/pi-agent-core';
+import { killProcessGroup, bindAbortToProcess } from '../utils/process.js';
 
 const RunPythonParams = Type.Object({
   code: Type.String({ description: '要执行的 Python 代码' }),
@@ -21,7 +22,7 @@ export function createRunPythonTool(workDir: string): AgentTool<typeof RunPython
     async execute(
       _toolCallId: string,
       params: RunPythonParams,
-      _signal?: AbortSignal,
+      signal?: AbortSignal,
       onUpdate?: AgentToolUpdateCallback<unknown>,
     ): Promise<AgentToolResult<unknown>> {
       onUpdate?.({
@@ -41,13 +42,44 @@ export function createRunPythonTool(workDir: string): AgentTool<typeof RunPython
           details: { phase: 'running', codeLength: params.code.length },
         });
 
-        return new Promise((resolve) => {
+        // 必须 await：若直接 return Promise，finally 会在它 settle **之前**执行，
+        // 把 python3 正要读取的 script.py 连同临时目录一起删掉
+        // （实测该写法 100% 报 "can't open file ... script.py"）。
+        return await new Promise((resolve) => {
           let output = '';
+          let settled = false;
+
           const proc = spawn('python3', [tmpFile], {
             cwd,
-            timeout: 60000,
+            // detached: 让 python3 自成进程组组长 —— 中止/超时时才能连带清理
+            // 脚本自己拉起的子进程（直接 kill python3 会留下孤儿）。这里不 unref()。
+            detached: true,
             env: { ...process.env },
           });
+
+          // 超时兜底：防止脚本卡死后 Promise 永远不 resolve。
+          // 不再用 spawn 的 timeout 选项 —— 它只给 python3 发信号，漏掉其子进程。
+          const timeoutHandle = setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            killProcessGroup(proc, 'SIGKILL');
+            resolve({
+              content: [{ type: 'text', text: output || 'Python 执行超时（60秒）' }],
+              details: { exitCode: -1, timedOut: true },
+            });
+          }, 60000);
+
+          // 连接 AbortSignal：用户点停止时杀掉 python3 及其整条进程链
+          if (signal?.aborted) {
+            clearTimeout(timeoutHandle);
+            killProcessGroup(proc, 'SIGKILL');
+            resolve({
+              content: [{ type: 'text', text: '操作已中止' }],
+              details: { exitCode: -1 },
+            });
+            return;
+          }
+          bindAbortToProcess(proc, signal, () => settled);
 
           proc.stdout.on('data', (chunk: Buffer) => {
             const text = chunk.toString('utf-8');
@@ -64,6 +96,9 @@ export function createRunPythonTool(workDir: string): AgentTool<typeof RunPython
           });
 
           proc.on('close', (code) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timeoutHandle);
             const resultOutput = output || '代码执行完成（无输出）';
             resolve({
               content: [{ type: 'text', text: resultOutput }],
@@ -72,6 +107,9 @@ export function createRunPythonTool(workDir: string): AgentTool<typeof RunPython
           });
 
           proc.on('error', (err) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timeoutHandle);
             resolve({
               content: [{ type: 'text', text: `Python 执行失败: ${err.message}` }],
               details: { exitCode: -1, error: err.message },
