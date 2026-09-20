@@ -590,6 +590,83 @@
   background-color: var(--danger-bg);
 }
 
+/* 已中止：用户主动停止，非失败 —— 用中性色与 error 区分开 */
+.agent-status-badge.aborted {
+  color: var(--text-secondary);
+  background-color: var(--bg-hover);
+}
+
+/* 父子 Agent 列表项：作为停止按钮的定位基准 */
+.agent-list-item {
+  position: relative;
+}
+
+/* 停止子代理按钮（仅运行中显示；悬停转危险色，提示这是中止操作） */
+.agent-stop-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.agent-stop-btn:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-bg);
+}
+
+/* 详情弹窗头部的停止按钮（文字按钮，与右侧 ✕ 并列） */
+.agent-detail-stop {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.agent-detail-stop:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-bg);
+}
+
+/* 侧栏 tab 行的「全部停止」（仅当有运行中的子 Agent 时渲染） */
+.side-panel-stop-all {
+  margin-left: auto;
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 10px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.side-panel-stop-all:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-bg);
+}
+
 .agent-item-task {
   flex: 1;
   min-width: 0;

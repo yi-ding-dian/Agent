@@ -121,6 +121,27 @@ export async function abortSession(id: string) {
   if (!res.ok) throw new Error('中断失败');
 }
 
+/** 停止指定子代理（agentId = subagent 工具调用的 toolCallId，即前端 AgentInfo.id）
+ *  幂等：该子代理已结束时后端返回 stopped=false，不视为错误 */
+export async function abortSubAgent(sessionId: string, agentId: string) {
+  const res = await fetch(
+    apiUrl(`/api/sessions/${sessionId}/subagents/${encodeURIComponent(agentId)}/abort`),
+    { method: 'POST', headers: authHeaders() },
+  );
+  if (!res.ok) throw new Error('停止子代理失败');
+  return res.json() as Promise<{ success: boolean; stopped: boolean }>;
+}
+
+/** 停止该会话下所有运行中的子代理 */
+export async function abortAllSubAgents(sessionId: string) {
+  const res = await fetch(apiUrl(`/api/sessions/${sessionId}/subagents/abort`), {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error('停止子代理失败');
+  return res.json() as Promise<{ success: boolean; stopped: number }>;
+}
+
 /** 手动触发会话压缩；失败时透传后端中文错误（如"会话不存在"） */
 export async function compactSession(sessionId: string) {
   const res = await fetch(apiUrl(`/api/sessions/${sessionId}/compact`), {

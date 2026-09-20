@@ -66,13 +66,18 @@ export interface AgentInfo {
   id: string;
   /** 子代理任务描述（subagent 工具 args.task） */
   task: string;
-  status: 'running' | 'completed' | 'error';
+  status: 'running' | 'completed' | 'error' | 'aborted';
   startedAt: number;
   endedAt?: number;
   /** 实时过程事件流（子代理内部工具调用 / 文本增量 / 结束标记） */
   events: SubagentEvent[];
   /** 子代理最终摘要（tool_end 的 result.details.summary） */
   summary?: string;
+  /**
+   * 过程事件缺失标记：刷新/切换会话后由消息重建的条目为 true。
+   * 实时事件流（events）不随消息持久化，只有任务/状态/摘要能从消息恢复。
+   */
+  eventsLost?: boolean;
 }
 
 /** 扩展 UI 交互请求 */

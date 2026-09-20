@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { AgentInfo } from '../../types/chat';
+import type { AgentInfo, ToolCallInfo } from '../../types/chat';
 import { MarkdownRenderer } from '../common/MarkdownRenderer';
 import { ResizableModal } from '../common/ResizableModal';
+import { ToolCallGroup } from './ToolCallGroup';
+import { useChatStore } from '../../store/chat-store';
 
 interface AgentDetailModalProps {
   agent: AgentInfo;
@@ -22,40 +24,9 @@ interface ToolCard {
   ts?: number;
 }
 
-const TOOL_LABELS: Record<string, string> = {
-  read_file: '读取文件',
-  write_file: '写入文件',
-  execute_command: '执行命令',
-  search_web: '搜索网络',
-  run_python: '运行Python',
-  subagent: '子代理',
-};
-
-/** 参数/结果文本：字符串原样，对象 JSON 化。
- *  不截断 —— 除行内摘要（由 CSS ellipsis 兜底）外，展开区还用它渲染完整 <pre> */
-function formatPayload(payload: unknown): string {
-  if (typeof payload === 'string') return payload;
-  if (payload === undefined || payload === null) return '';
-  return JSON.stringify(payload) ?? '';
-}
-
-/** 时间戳格式：HH:MM:SS.mmm（与主界面 tool-group-time 一致） */
-function formatEventTime(ts?: number): string {
-  if (!ts) return '';
-  const d = new Date(ts);
-  return (
-    d.toLocaleTimeString('zh-CN', { hour12: false }) +
-    '.' +
-    String(d.getMilliseconds()).padStart(3, '0')
-  );
-}
-
-/** 单行参数摘要：字符串原样，对象 JSON 化，截断 ~60 字 */
-function summarizeArgsInline(args: unknown): string {
-  // 不截断：能显示多长就多长，装不下时由 .agent-event-args-inline 的 ellipsis 处理，全文经 title 提示
-  if (args === undefined || args === null) return '';
-  return typeof args === 'string' ? args : formatPayload(args);
-}
+/* 工具名标签、参数/时间格式化统一走 utils/tool-display ——
+   此前本文件各写一份（TOOL_LABELS / formatPayload / formatEventTime / summarizeArgsInline），
+   与主界面 ToolCallGroup 重复，导致主/子两侧行为不一致、每次调整都要改两处。 */
 
 /** 事件流 → 展示结构：工具卡片（配对的 start/end）+ 文本增量 + 思考增量 + 结束标记 */
 function buildEventView(events: AgentInfo['events']) {
@@ -101,6 +72,7 @@ function buildEventView(events: AgentInfo['events']) {
 }
 
 export function AgentDetailModal({ agent, index, onClose }: AgentDetailModalProps) {
+  const stopSubAgent = useChatStore((s) => s.stopSubAgent);
   // running 时每秒刷新一次"进行中时长"，结束或关闭后停表
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -114,26 +86,41 @@ export function AgentDetailModal({ agent, index, onClose }: AgentDetailModalProp
     [agent.events],
   );
 
+  // ToolCard → ToolCallInfo 映射，使子 Agent 直接复用主界面的 ToolCallGroup。
+  // 两侧字段本就同构，仅两处命名不同：key→id、ts→startTime。
+  const toolCallsForGroup: ToolCallInfo[] = useMemo(
+    () =>
+      toolCards.map((c) => ({
+        id: c.key,
+        toolName: c.toolName,
+        args: c.args,
+        status: c.status,
+        result: c.result,
+        startTime: c.ts,
+      })),
+    [toolCards],
+  );
+
   // 思考块折叠状态（running 时自动展开，与主对话 thinking 行为一致）
   const [thinkingExpanded, setThinkingExpanded] = useState(false);
-  // 工具调用分组折叠状态：默认折叠，点击分组标题栏展开（对齐主界面 ToolCallGroup）
-  const [toolsExpanded, setToolsExpanded] = useState(false);
-  // 工具日志行折叠状态：默认全部折叠，点击行展开完整参数/结果
-  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
-  const toggleCard = (key: string) => {
-    setExpandedCards((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
   const thinkingOpen = thinkingExpanded || (agent.status === 'running' && !!thinkingBuffer);
 
-  // 工具调用统计（分组标题栏徽章：执行中 / 成功 / 失败）
-  const completedCount = toolCards.filter((c) => c.status === 'completed').length;
-  const errorCount = toolCards.filter((c) => c.status === 'error').length;
-  const runningCount = toolCards.filter((c) => c.status === 'running').length;
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * 用户是否手动滚离了底部。
+   *
+   * 必须按「用户主动滚动」判断，不能用「当前位置距离底部多远」：内容超过一屏时
+   * scrollTop 停在 0，位置判断会得出"远离底部"从而永不跟随 —— 这正是首版实现的 bug。
+   */
+  const userScrolledAwayRef = useRef(false);
+
+  /** 流式输出时跟随到底部；用户手动上翻后暂停，滚回底部自动恢复 */
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el || userScrolledAwayRef.current) return;
+    el.scrollTop = el.scrollHeight;
+  }, [thinkingBuffer, textBuffer]);
 
   const durationSec = agent.endedAt
     ? Math.max(0, Math.round((agent.endedAt - agent.startedAt) / 1000))
@@ -147,7 +134,8 @@ export function AgentDetailModal({ agent, index, onClose }: AgentDetailModalProp
   return createPortal(
     <div className="modal-overlay">
       <ResizableModal
-        width={620}
+        width={900}
+        height="min(78vh, 720px)"
         onEsc={onClose}
       >
         <div className="agent-detail-header">
@@ -157,21 +145,46 @@ export function AgentDetailModal({ agent, index, onClose }: AgentDetailModalProp
               ? '执行中'
               : agent.status === 'completed'
                 ? '完成'
-                : '失败'}
+                : agent.status === 'aborted'
+                  ? '已中止'
+                  : '失败'}
           </span>
           <span className="agent-detail-duration">
             {agent.status === 'running' ? '进行中 ' : '用时 '}
             {durationSec}s
           </span>
+          {/* 停止按钮：运行中显示；只中止该子代理，主代理会收到「已被用户中止」后继续自己的循环 */}
+          {agent.status === 'running' && (
+            <button
+              type="button"
+              className="agent-detail-stop"
+              title="停止该子代理（主代理不受影响）"
+              onClick={() => stopSubAgent(agent.id)}
+            >
+              停止
+            </button>
+          )}
           <button type="button" className="agent-detail-close" onClick={onClose}>
             &#10005;
           </button>
         </div>
         <div className="agent-detail-task">任务：{agent.task || '(未提供任务描述)'}</div>
 
-        <div className="agent-detail-body">
+        <div
+          className="agent-detail-body"
+          ref={bodyRef}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            // 距底部 80px 内视为「在底部」：滚回底部即恢复自动跟随
+            userScrolledAwayRef.current = el.scrollHeight - el.scrollTop - el.clientHeight > 80;
+          }}
+        >
           {toolCards.length === 0 && !textBuffer && !thinkingBuffer && (
-            <div className="agent-detail-empty">暂无过程事件</div>
+            <div className="agent-detail-empty">
+              {agent.eventsLost
+                ? '过程未保留：刷新或切换会话后只恢复任务与结果，执行过程不回放'
+                : '暂无过程事件'}
+            </div>
           )}
 
           {/* 思考过程（折叠块，样式与主对话 thinking-block 一致：米黄背景/可展开） */}
@@ -186,7 +199,12 @@ export function AgentDetailModal({ agent, index, onClose }: AgentDetailModalProp
                   {agent.status === 'running' && !textBuffer ? '思考中...' : '思考过程'}
                 </span>
               </div>
-              {thinkingOpen && <div className="thinking-content">{thinkingBuffer}</div>}
+              {thinkingOpen && (
+                <div className="thinking-content">
+                  {/* 与主对话一致：思考内容走 Markdown 渲染（此前纯文本直出，代码块/列表会显示成原始标记） */}
+                  <MarkdownRenderer content={thinkingBuffer} isStreaming={agent.status === 'running'} />
+                </div>
+              )}
             </div>
           )}
 
@@ -201,86 +219,9 @@ export function AgentDetailModal({ agent, index, onClose }: AgentDetailModalProp
             </div>
           )}
 
-          {/* 工具调用折叠组：形态对齐主界面 ToolCallGroup（标题栏 + 徽章 + ▸箭头，默认折叠）。
-              展开后为紧凑日志行列表（状态图标+时间戳+工具名+参数摘要，行点击展开完整参数/结果） */}
-          {toolCards.length > 0 && (
-            <div className="tool-call-group">
-              <div
-                className="tool-call-group-header"
-                onClick={() => setToolsExpanded(!toolsExpanded)}
-                role="button"
-                tabIndex={0}
-                aria-expanded={toolsExpanded}
-              >
-                <span className="tool-call-group-title">&#9881; 工具调用 ({toolCards.length})</span>
-                {runningCount > 0 && (
-                  <span className="tool-group-badge running">{runningCount} 执行中</span>
-                )}
-                {completedCount > 0 && (
-                  <span className="tool-group-badge success">{completedCount} 成功</span>
-                )}
-                {errorCount > 0 && (
-                  <span className="tool-group-badge error">{errorCount} 失败</span>
-                )}
-                <span className={`tool-group-chevron${toolsExpanded ? ' expanded' : ''}`}>
-                  &#9654;
-                </span>
-              </div>
-              {toolsExpanded && (
-                <div className="tool-call-group-body">
-                  {toolCards.map((card) => {
-                    const cardOpen = expandedCards.has(card.key);
-                    return (
-                      <div key={card.key} className={`agent-event-card ${card.status}`}>
-                        {/* 点击整行展开/收起（默认折叠，与主界面工具调用一致） */}
-                        <div
-                          className="agent-event-tool-row"
-                          onClick={() => toggleCard(card.key)}
-                          role="button"
-                          tabIndex={0}
-                        >
-                          <span className="agent-event-toggle">{cardOpen ? '▾' : '▸'}</span>
-                          <span className="agent-event-status">
-                            {card.status === 'running' ? (
-                              <span className="agent-event-spinner" />
-                            ) : card.status === 'completed' ? (
-                              <span className="agent-event-ok">&#10003;</span>
-                            ) : (
-                              <span className="agent-event-err">&#10007;</span>
-                            )}
-                          </span>
-                          <span className="agent-event-time">{formatEventTime(card.ts)}</span>
-                          <span className="agent-event-tool-name">
-                            {TOOL_LABELS[card.toolName] || card.toolName || '工具'}
-                          </span>
-                          <span className="agent-event-args-inline" title={summarizeArgsInline(card.args)}>
-                            {summarizeArgsInline(card.args)}
-                          </span>
-                          {card.status === 'running' && (
-                            <span className={`agent-event-state ${card.status}`}>执行中</span>
-                          )}
-                        </div>
-                        {cardOpen && (
-                          <>
-                            {formatPayload(card.args) && (
-                              <pre className="agent-event-args">{formatPayload(card.args)}</pre>
-                            )}
-                            {card.result !== undefined && formatPayload(card.result) && (
-                              <pre
-                                className={`agent-event-result${card.status === 'error' ? ' error' : ''}`}
-                              >
-                                {formatPayload(card.result)}
-                              </pre>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
+          {/* 工具调用折叠组：直接复用主界面的 ToolCallGroup（此前本组件手写了一份，
+              导致主/子两侧行为不一致、每次调整都要改两处） */}
+          {toolCards.length > 0 && <ToolCallGroup toolCalls={toolCallsForGroup} />}
 
           {finished && (
             <div className="agent-event-finish">

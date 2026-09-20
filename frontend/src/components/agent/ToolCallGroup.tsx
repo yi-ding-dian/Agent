@@ -1,33 +1,9 @@
 import { useState } from 'react';
 import type { ToolCallInfo } from '../../types/chat';
+import { TOOL_LABELS, formatToolArgs, formatToolPayload, formatToolTime } from '../../utils/tool-display';
 
 interface ToolCallGroupProps {
   toolCalls: ToolCallInfo[];
-}
-
-function formatTime(ts?: number): string {
-  if (!ts) return '';
-  const d = new Date(ts);
-  return d.toLocaleTimeString('zh-CN', { hour12: false }) + '.' + String(d.getMilliseconds()).padStart(3, '0');
-}
-
-function formatArgs(tc: ToolCallInfo): string {
-  const a = tc.args || {};
-  switch (tc.toolName) {
-    case 'read_file':
-      return a.path || a.filePath || '';
-    case 'write_file':
-      return a.path || a.filePath || '';
-    case 'execute_command':
-      return a.command || '';
-    case 'search_web':
-      return a.query || '';
-    case 'run_python':
-      // 不做字数截断：能显示多长就多长，装不下时才由容器 ellipsis，全文经 title 悬停提示
-      return a.code || '';
-    default:
-      return JSON.stringify(a);
-  }
 }
 
 function StatusIcon({ status }: { status: ToolCallInfo['status'] }) {
@@ -43,19 +19,28 @@ function StatusIcon({ status }: { status: ToolCallInfo['status'] }) {
   }
 }
 
-const TOOL_LABELS: Record<string, string> = {
-  read_file: '读取文件',
-  write_file: '写入文件',
-  execute_command: '执行命令',
-  search_web: '搜索网络',
-  run_python: '运行Python',
-};
-
+/**
+ * 工具调用折叠组（主 Agent 消息区与子 Agent 详情弹窗共用）
+ *
+ * 层叠两级展开：组头点击展开列表；列表内每行点击展开该条工具的完整参数与返回结果。
+ * 格式化与标签统一走 utils/tool-display，避免主/子两侧各维护一份导致行为不一致。
+ */
 export function ToolCallGroup({ toolCalls }: ToolCallGroupProps) {
   // 默认折叠（用户要求：工具调用不自动展开，点击才展开）
   const [expanded, setExpanded] = useState(false);
+  // 单条工具卡片的展开态（点行查看完整 args / result）
+  const [openIds, setOpenIds] = useState<Set<string>>(new Set());
   const running = toolCalls.filter((t) => t.status === 'running').length;
   const errors = toolCalls.filter((t) => t.status === 'error').length;
+
+  const toggleRow = (id: string) => {
+    setOpenIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   return (
     <div className="tool-call-group">
@@ -69,17 +54,35 @@ export function ToolCallGroup({ toolCalls }: ToolCallGroupProps) {
       </div>
       {expanded && (
         <div className="tool-call-group-body">
-          {toolCalls.map((tc) => (
-            <div key={tc.id} className={`tool-group-item ${tc.status}`} data-tool-call-id={tc.id}>
-              <StatusIcon status={tc.status} />
-              <span className="tool-group-time">{formatTime(tc.startTime)}</span>
-              <span className="tool-group-action">{TOOL_LABELS[tc.toolName] || tc.toolName}</span>
-              <span className="tool-group-args" title={formatArgs(tc)}>{formatArgs(tc)}</span>
-              {tc.status === 'error' && tc.errorMessage && (
-                <div className="tool-group-error-msg">{tc.errorMessage}</div>
-              )}
-            </div>
-          ))}
+          {toolCalls.map((tc) => {
+            const argsText = formatToolArgs(tc.toolName, tc.args);
+            const open = openIds.has(tc.id);
+            const detailArgs = formatToolPayload(tc.args);
+            const detailResult = tc.result === undefined ? '' : formatToolPayload(tc.result);
+            return (
+              <div
+                key={tc.id}
+                className={`tool-group-item ${tc.status}`}
+                data-tool-call-id={tc.id}
+                onClick={() => toggleRow(tc.id)}
+              >
+                <span className={`tool-group-toggle${open ? ' open' : ''}`}>&#9654;</span>
+                <StatusIcon status={tc.status} />
+                <span className="tool-group-time">{formatToolTime(tc.startTime)}</span>
+                <span className="tool-group-action">{TOOL_LABELS[tc.toolName] || tc.toolName}</span>
+                <span className="tool-group-args" title={argsText}>{argsText}</span>
+                {tc.status === 'error' && tc.errorMessage && (
+                  <div className="tool-group-error-msg">{tc.errorMessage}</div>
+                )}
+                {open && (
+                  <div className="tool-group-detail">
+                    {detailArgs && <pre className="tool-group-pre">{detailArgs}</pre>}
+                    {detailResult && <pre className="tool-group-pre result">{detailResult}</pre>}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

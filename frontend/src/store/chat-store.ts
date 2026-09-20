@@ -78,6 +78,10 @@ interface ChatStore {
   recoverSessionAfterInterrupt: (sessionId: string) => Promise<void>;
   sendMessage: (text: string, images?: { type: string; data: string; mimeType: string }[]) => Promise<void>;
   stopGeneration: () => void;
+  /** 停止指定子代理（agentId = AgentInfo.id = subagent 工具调用的 toolCallId） */
+  stopSubAgent: (agentId: string) => Promise<void>;
+  /** 停止当前会话下所有运行中的子代理（主代理不受影响） */
+  stopAllSubAgents: () => Promise<void>;
   handleSSEEvent: (event: SSEEvent) => void;
   handleWSEvent: (event: SSEEvent) => void;
   loadConfig: () => Promise<void>;
@@ -148,6 +152,41 @@ function extractTextContent(content: any): string {
  *   （提取 text → content，thinking → thinking，toolCall → toolCalls）
  * - 旧格式（content 为纯字符串）兼容
  */
+/**
+ * 从消息中的 subagent 工具调用重建子 Agent 列表。
+ *
+ * 场景：agents 是会话级内存状态（由 SSE 实时事件驱动），刷新页面或切换会话后会丢失，
+ * 但 subagent 的调用记录留在消息的 toolCalls 里 —— 据此恢复「任务 / 状态 / 摘要」。
+ * 注意：实时过程事件流（events）不随消息持久化，重建条目 events 为空且 eventsLost=true，
+ * 详情页据此提示"过程未保留"，而非误显示成"没有过程"。
+ */
+function rebuildAgentsFromMessages(messages: ChatMessage[]): AgentInfo[] {
+  const agents: AgentInfo[] = [];
+  for (const m of messages) {
+    for (const tc of m.toolCalls ?? []) {
+      if (tc.toolName !== 'subagent') continue;
+      const details = (tc.result as any)?.details;
+      const task = typeof (tc.args as any)?.task === 'string' ? (tc.args as any).task : '';
+      agents.push({
+        id: tc.id,
+        task,
+        // aborted 优先（用户主动停止）；completed 之外（error/running/pending）均视为未正常完成
+        status: details?.aborted
+          ? 'aborted'
+          : tc.status === 'completed'
+            ? 'completed'
+            : 'error',
+        startedAt: tc.startTime ?? m.timestamp,
+        endedAt: tc.endTime,
+        events: [],
+        summary: typeof details?.summary === 'string' ? details.summary : undefined,
+        eventsLost: true,
+      });
+    }
+  }
+  return agents;
+}
+
 function apiMessagesToChatMessages(apiMessages: any[]): ChatMessage[] {
   const result: ChatMessage[] = [];
 
@@ -305,6 +344,29 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   clearError: () => set({ error: null }),
   /** 魔法飞行结束（MagicFly 组件动画完成后调用），清空触发请求 */
   clearFly: () => set({ flyRequest: null }),
+
+  // 停止子代理：不在本地乐观改状态 —— 后端中止后 subagent 工具会以 tool_end 回流
+  // （details.aborted=true），由 handleSSEEvent 统一把该 agent 标为 'aborted'。
+  // 这样状态只有一个来源，避免本地猜测与后端不一致。
+  stopSubAgent: async (agentId) => {
+    const sid = get().activeSessionId;
+    if (!sid) return;
+    try {
+      await api.abortSubAgent(sid, agentId);
+    } catch (err: any) {
+      set({ error: err?.message || '停止子代理失败' });
+    }
+  },
+
+  stopAllSubAgents: async () => {
+    const sid = get().activeSessionId;
+    if (!sid) return;
+    try {
+      await api.abortAllSubAgents(sid);
+    } catch (err: any) {
+      set({ error: err?.message || '停止子代理失败' });
+    }
+  },
   setMode: (mode) => set({ mode }),
   setPlanMode: (on) => set({ planMode: on, planReady: null }),
   /** 「按此计划执行」：关闭规划并发送执行指令（计划文本随消息发给模型） */
@@ -381,7 +443,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         totalUsage: { input: 0, output: 0, total: 0 },
         needsRebuild: true,
         scrolledAway: false,
-        agents: [],
+        agents: rebuildAgentsFromMessages(apiMessagesToChatMessages(data.messages || [])),
         flyRequest: null,
       });
     } catch { set({ activeSessionId: id, messages: [], agents: [], flyRequest: null, totalUsage: { input: 0, output: 0, total: 0 }, scrolledAway: false, needsRebuild: true }); }
@@ -915,7 +977,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           }
           return { messages: msgs };
         });
-        // 干活的 Agent：subagent 工具结束 → 状态完成/失败 + 结束时间 + 最终摘要
+        // 干活的 Agent：subagent 工具结束 → 状态完成/失败/已中止 + 结束时间 + 最终摘要
         if (event.toolName === 'subagent') {
           const resultDetails = (event.result as any)?.details;
           set((s) => ({
@@ -923,7 +985,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
               a.id === event.toolCallId
                 ? {
                     ...a,
-                    status: event.isError ? ('error' as const) : ('completed' as const),
+                    // 用户主动停止优先于 isError 判定：属预期操作，界面显示「已中止」而非「失败」
+                    status: resultDetails?.aborted
+                      ? ('aborted' as const)
+                      : event.isError
+                        ? ('error' as const)
+                        : ('completed' as const),
                     endedAt: Date.now(),
                     summary:
                       typeof resultDetails?.summary === 'string'

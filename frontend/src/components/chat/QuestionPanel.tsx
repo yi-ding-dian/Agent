@@ -35,6 +35,8 @@ function truncate(text: string, max = 40): string {
 export function QuestionPanel() {
   const messages = useChatStore((s) => s.messages);
   const agents = useChatStore((s) => s.agents);
+  const stopSubAgent = useChatStore((s) => s.stopSubAgent);
+  const stopAllSubAgents = useChatStore((s) => s.stopAllSubAgents);
   const [activeTab, setActiveTab] = useState<'questions' | 'agents'>('questions');
   // 只存 id，渲染时从 store 实时取最新对象（events 持续追加 → 弹窗流式实时刷新；
   // 若直接存对象引用，store 更新后弹窗会冻结在打开瞬间的快照）
@@ -105,6 +107,17 @@ export function QuestionPanel() {
             &#10005;
           </button>
         )}
+        {/* 全部停止：仅在确有运行中的子 Agent 时出现（主代理不受影响） */}
+        {agentsTabVisible && runningCount > 0 && (
+          <button
+            type="button"
+            className="side-panel-stop-all"
+            title="停止所有运行中的子Agent（主代理不受影响）"
+            onClick={() => stopAllSubAgents()}
+          >
+            全部停止
+          </button>
+        )}
       </div>
 
       {activeTab === 'questions' ? (
@@ -135,7 +148,7 @@ export function QuestionPanel() {
               ? Math.max(0, Math.round((agent.endedAt - agent.startedAt) / 1000))
               : Math.max(0, Math.round((Date.now() - agent.startedAt) / 1000));
             return (
-              <li key={agent.id}>
+              <li key={agent.id} className="agent-list-item">
                 <button
                   type="button"
                   className="agent-item"
@@ -148,7 +161,9 @@ export function QuestionPanel() {
                       ? '执行中'
                       : agent.status === 'completed'
                         ? '完成'
-                        : '失败'}
+                        : agent.status === 'aborted'
+                          ? '已中止'
+                          : '失败'}
                   </span>
                   <span className="agent-item-task" title={agent.task}>
                     {truncate(agent.task, 40)}
@@ -157,6 +172,17 @@ export function QuestionPanel() {
                     {agent.status === 'running' ? `${duration}s 中` : `${duration}s`}
                   </span>
                 </button>
+                {/* 停止按钮与 .agent-item 同级：button 不能嵌套 button。仅运行中显示 */}
+                {agent.status === 'running' && (
+                  <button
+                    type="button"
+                    className="agent-stop-btn"
+                    title="停止该子代理（主代理不受影响）"
+                    onClick={() => stopSubAgent(agent.id)}
+                  >
+                    &#8856;
+                  </button>
+                )}
               </li>
             );
           })}

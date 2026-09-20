@@ -228,6 +228,10 @@
   overflow-wrap: anywhere;
   overflow: hidden;
   min-width: 0;
+  /* 宽度上限：.message-row 是 align-self:flex-start（按内容收缩宽度），气泡若不加限
+     会被超长内容（如工具调用参数）撑破并溢出消息行 —— overflow:hidden 只裁内容、
+     限不住自身宽度。实测：加此条前 bubble 1011px > row 669px，加后一致。 */
+  max-width: 100%;
 }
 
 .message-bubble.user {
@@ -511,6 +515,8 @@
   padding: 6px 12px;
   border-bottom: 1px solid var(--border-light);
   font-size: 12px;
+  /* 整行可点：展开/收起该条工具的完整参数与结果 */
+  cursor: pointer;
 }
 
 .tool-group-item:last-child {
@@ -582,6 +588,49 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 单条工具卡片的展开箭头（点行展开完整 args/result） */
+.tool-group-toggle {
+  width: 12px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 10px;
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+}
+.tool-group-toggle.open {
+  transform: rotate(90deg);
+}
+
+/* 展开区：flex-basis:100% 使其独占一行（父 .tool-group-item 是 flex-wrap 容器） */
+.tool-group-detail {
+  flex-basis: 100%;
+  min-width: 0;
+  margin-top: 4px;
+}
+
+/* 完整参数 / 返回结果（不截断；超高时区内滚动，避免撑破消息气泡） */
+.tool-group-pre {
+  margin: 0;
+  padding: 6px 10px;
+  max-height: 60vh;
+  overflow: auto;
+  font-family: monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+}
+.tool-group-pre.result {
+  color: var(--text-primary);
+}
+.tool-group-detail .tool-group-pre + .tool-group-pre {
+  margin-top: 4px;
 }
 
 .tool-group-error-msg {
