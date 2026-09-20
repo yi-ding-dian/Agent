@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { ChatMessage, ImageAttachment, AgentMode, SessionInfo, ToolCallInfo, ExtensionUIRequest, AgentInfo, SubagentEvent } from '../types/chat';
 import type { SSEEvent } from '../types/events';
 import type { ConfigData } from '../types/api';
-import { fetchSSE } from '../services/sse-client';
+import { fetchSSE, StreamInterruptedError } from '../services/sse-client';
 import { getLlmOverrides, apiUrl, isElectron } from '../services/api-config';
 import { getWSClient, type WSStatus } from '../services/ws-client';
 import { confirmDialog } from './confirm-dialog';
@@ -28,6 +28,10 @@ interface ChatStore {
   clearFly: () => void;
   isProcessing: boolean;
   mode: AgentMode;
+  /** 规划模式开关（web/SSE；只读调研，plan 轮完成后展示计划卡片） */
+  planMode: boolean;
+  /** 规划轮完成的计划文本（最后一条 assistant 消息），PlanCard 展示 */
+  planReady: string | null;
   error: string | null;
   config: ConfigData | null;
   pendingConfirmation: ConfirmationRequest | null;
@@ -56,6 +60,9 @@ interface ChatStore {
   signalDragClear: () => void;
 
   setMode: (mode: AgentMode) => void;
+  setPlanMode: (on: boolean) => void;
+  /** 「按此计划执行」：关闭规划并发送执行指令 */
+  executePlan: () => Promise<void>;
   clearError: () => void;
   loadSessions: () => Promise<void>;
   createNewSession: () => Promise<void>;
@@ -67,6 +74,8 @@ interface ChatStore {
   editMessage: (userMsgId: string, newText: string) => Promise<void>;
   /** 手动压缩会话（TokenBar「压缩对话」按钮）：失败时设置 store.error 并 rethrow 供按钮旁红字提示 */
   compactSession: (sessionId: string) => Promise<any>;
+  /** 断线恢复：轮询拉取会话完整消息直至稳定（SSE 流中断后） */
+  recoverSessionAfterInterrupt: (sessionId: string) => Promise<void>;
   sendMessage: (text: string, images?: { type: string; data: string; mimeType: string }[]) => Promise<void>;
   stopGeneration: () => void;
   handleSSEEvent: (event: SSEEvent) => void;
@@ -267,6 +276,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   flyRequest: null,
   isProcessing: false,
   mode: 'agent',
+  planMode: false,
+  planReady: null,
   error: null,
   config: null,
   pendingConfirmation: null,
@@ -295,6 +306,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   /** 魔法飞行结束（MagicFly 组件动画完成后调用），清空触发请求 */
   clearFly: () => set({ flyRequest: null }),
   setMode: (mode) => set({ mode }),
+  setPlanMode: (on) => set({ planMode: on, planReady: null }),
+  /** 「按此计划执行」：关闭规划并发送执行指令（计划文本随消息发给模型） */
+  executePlan: async () => {
+    const plan = get().planReady;
+    set({ planMode: false, planReady: null });
+    if (plan) await get().sendMessage(`请按以下计划执行：\n\n${plan}`);
+  },
   loadConfig: async () => {
     try {
       // Electron 模式：配置在主进程本地（LLM 直连参数）
@@ -366,7 +384,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         agents: [],
         flyRequest: null,
       });
-    } catch { set({ activeSessionId: id, messages: [], agents: [], flyRequest: null, totalUsage: { input: 0, output: 0, total: 0 }, scrolledAway: false }); }
+    } catch { set({ activeSessionId: id, messages: [], agents: [], flyRequest: null, totalUsage: { input: 0, output: 0, total: 0 }, scrolledAway: false, needsRebuild: true }); }
   },
   renameSession: async (id, name) => {
     try {
@@ -626,6 +644,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         message: text,
         sessionId: activeSessionId || undefined,
         mode,
+        // 规划模式：仅 SSE 路径支持（后端工具面热切换；Electron/WS 路径不生效）
+        plan: get().planMode === true,
       };
       if (images?.length) body.images = images;
       if (needsRebuild) {
@@ -644,6 +664,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     } catch (err: any) {
       if (err.name === 'AbortError') {
         set({ isProcessing: false });
+      } else if (err instanceof StreamInterruptedError) {
+        // 流中断（服务端 run 继续执行、结果已落库）：不重发，恢复视图拉取完整消息
+        set({ error: '连接中断，正在恢复…', isProcessing: false });
+        const sid = get().activeSessionId;
+        if (sid) await get().recoverSessionAfterInterrupt(sid);
       } else {
         set({ error: err.message, isProcessing: false });
       }
@@ -651,6 +676,32 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       abortController = null;
       get().loadSessions();
     }
+  },
+
+  /** 断线恢复：服务端 run 中断不中止（res close 仅记日志），轮询拉取完整消息至稳定 */
+  recoverSessionAfterInterrupt: async (sessionId: string) => {
+    let lastLen = -1;
+    let stableCount = 0;
+    for (let i = 0; i < 6; i++) {
+      try {
+        const data = await api.getSession(sessionId);
+        const msgs = apiMessagesToChatMessages(data.messages || []);
+        set({ messages: msgs });
+        if (msgs.length === lastLen) {
+          stableCount++;
+          if (stableCount >= 1) break; // 连续两次相同 = 生成完成
+        } else {
+          stableCount = 0;
+          lastLen = msgs.length;
+        }
+      } catch {
+        /* 服务端短暂不可用时继续等一轮 */
+      }
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+    set({ error: null });
+    const hasTail = !!(get().messages.at(-1)?.role === 'assistant');
+    if (!hasTail) set({ error: '连接已恢复，但最后一条回复可能未完整，可点击重新生成或稍后刷新会话' });
   },
 
   stopGeneration: () => {
@@ -913,6 +964,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           }
           return { messages: msgs, isProcessing: false };
         });
+        // 规划模式：plan 轮完成 → 展示计划卡片（PlanCard 渲染 + 「执行」按钮）
+        if (get().planMode) {
+          const last = get().messages[get().messages.length - 1];
+          if (last?.role === 'assistant') set({ planReady: last.content });
+        }
         // 自动处理队列中的消息
         get().processQueue();
         break;

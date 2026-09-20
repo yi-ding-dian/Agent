@@ -291,11 +291,11 @@ export class SessionManager {
   }
 
   getSessionHistory(id: string) {
-    const messages = this.getSession(id)?.messages;
-    // 注意：空数组也是 truthy。内存会话存在但消息为空（如 sync 只写 DB 的场景）
-    // 时不能挡在 DB 回退前面，否则 DB 里已持久化的消息永远读不到。
-    if (messages && messages.length > 0) {
-      return messages.map((m: any) => {
+    // 内存会话：会话存在即返回（空会话 → []；此前"空消息数组跳过回退"的写法
+    // 让新建的空会话 GET 详情/导出恒 404——修复：空 = 会话存在但无消息）
+    const entry = this.sessions.get(id);
+    if (entry) {
+      return entry.service.messages.map((m: any) => {
         const base: any = {
           role: m.role,
           content: m.content, // 保留原始 content
@@ -314,9 +314,10 @@ export class SessionManager {
         return base;
       });
     }
-    // 内存中不存在（服务重启后），回退到数据库
+    // 内存中不存在（服务重启后），回退到数据库：getMessages null = 会话记录不存在
     const dbMessages = this.sessionStore.getMessages(id);
-    if (dbMessages && dbMessages.length > 0) {
+    if (dbMessages !== null) {
+      // 会话存在（含空消息）→ 返回（[] 或解析出的消息）
       return dbMessages as { role: string; content: string; timestamp: number }[];
     }
     return undefined;

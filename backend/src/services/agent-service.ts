@@ -10,6 +10,27 @@ import { config } from '../config.js';
 
 export type AgentRunMode = 'chat' | 'agent';
 
+/**
+ * 规划模式（plan）禁止的工具：写文件 / 执行命令 / 运行 Python / 记忆写入 / 子代理。
+ * 只读调研类（read_file/grep_search/list_files/search_web/run_skill）保留。
+ * 实现：plan 轮临时把 agent.tools 换成过滤子集（Agent 的 tools getter/setter），
+ * 消息前缀注入规划约束（无需重建 Agent / system prompt）。
+ */
+const PLAN_BLOCKED_TOOLS = new Set([
+  'write_file',
+  'edit_file',
+  'execute_command',
+  'run_python',
+  'remember',
+  'subagent',
+]);
+
+/** 规划模式注入到消息前缀的约束指令 */
+const PLAN_PREFIX = `【规划模式】当前为规划（只读调研）阶段，请遵守：
+1. 只使用只读工具（查看/搜索/浏览），禁止写文件、执行命令、运行代码；
+2. 产出结构化计划：目标 → 涉及文件/范围 → 具体步骤 → 风险与验证方式；
+3. 不要执行、不要修改任何内容，计划完成即结束。`;
+
 export interface ClientEvent {
   type: string;
   [key: string]: unknown;
@@ -54,6 +75,9 @@ export class AgentSessionService {
 
   /** 模型预设级思考模式（undefined = 跟随全局 thinking_level；applyModelOverrides 重建时用于比较） */
   readonly thinkingLevel?: string;
+
+  /** 规划模式时暂存的正常工具集（plan 轮结束后恢复） */
+  private planNormalTools: AgentTool<any>[] | null = null;
 
   constructor(
     sessionId: string,
@@ -209,11 +233,24 @@ export class AgentSessionService {
     console.log(`[AgentSession] Session ${sessionId} created`);
   }
 
-  async processMessage(message: string, images?: ImageContent[]): Promise<void> {
+  async processMessage(message: string, images?: ImageContent[], opts?: { plan?: boolean }): Promise<void> {
     const imgInfo = images?.length ? ` images=${images.length}` : '';
-    console.log(`[AgentSession] processMessage session=${this.sessionId} message="${message.slice(0, 100)}"${imgInfo}`);
+    const inPlan = opts?.plan === true;
+
+    // 规划模式：临时切换只读工具集（首次进入保存原工具，退出恢复）；无需重建 Agent
+    // （工具集经 agent.state.tools 访问器替换，session 内即时生效）
+    if (inPlan && !this.planNormalTools) {
+      this.planNormalTools = this.agent.state.tools;
+      this.agent.state.tools = this.agent.state.tools.filter((t) => !PLAN_BLOCKED_TOOLS.has(t.name));
+    } else if (!inPlan && this.planNormalTools) {
+      this.agent.state.tools = this.planNormalTools;
+      this.planNormalTools = null;
+    }
+
+    const effectiveMessage = inPlan ? `${PLAN_PREFIX}\n\n${message}` : message;
+    console.log(`[AgentSession] processMessage session=${this.sessionId} plan=${inPlan} message="${effectiveMessage.slice(0, 100)}"${imgInfo}`);
     try {
-      await this.agent.prompt(message, images);
+      await this.agent.prompt(effectiveMessage, images);
       console.log(`[AgentSession] processMessage completed for ${this.sessionId}`);
     } catch (error: unknown) {
       console.error(`[AgentSession] processMessage error for ${this.sessionId}:`, error);

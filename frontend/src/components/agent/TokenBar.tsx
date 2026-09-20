@@ -9,6 +9,8 @@ interface TokenUsage {
   percent: number;
   messageCount: number;
   shouldCompact: boolean;
+  /** 会话实际使用的模型名（后端 token 接口返回；DB-only 会话回落用户全局默认模型） */
+  model?: string;
 }
 
 const DEFAULT_MAX_TOKENS = 65535;
@@ -172,6 +174,12 @@ export function TokenBar() {
   return (
     <div className="token-bar">
       <span className="token-bar-text">
+        {apiUsage?.model && (
+          <>
+            <span title="当前会话使用的模型">{apiUsage.model}</span>
+            <span className="token-sep"> · </span>
+          </>
+        )}
         <span title="会话内所有 LLM 调用的 token 累加（多轮累计，可能超过窗口，不代表当前上下文）">
           累计消耗: {cumulativeTokens.toLocaleString()} tokens
         </span>

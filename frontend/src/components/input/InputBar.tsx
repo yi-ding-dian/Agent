@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, KeyboardEvent, useEffect, useMemo } from
 import { useChatStore } from '../../store/chat-store';
 import { toast } from '../../store/toast-store';
 import { StopButton } from './StopButton';
+import { ModeMenu } from './ModeMenu';
 import type { ImageAttachment } from '../../types/chat';
 import * as api from '../../services/api';
 import {
@@ -543,6 +544,7 @@ export function InputBar() {
       )}
 
       <div className="input-bar-inner">
+        <ModeMenu />
         <div className="input-wrapper">
           <textarea
             ref={textareaRef}

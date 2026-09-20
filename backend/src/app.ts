@@ -4,6 +4,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { apiRouter } from './routes/index.js';
 import { agentConfigRouter } from './routes/external-service.routes.js';
+import { extProxyRouter } from './routes/ext-proxy.routes.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { requestLogger } from './middleware/request-logger.js';
 import { createAuthRouter } from './auth/index.js';
@@ -26,6 +27,12 @@ export function createApp(frontendDir: string) {
   //     风险：返回的链接本身含 token，可访问知识库；仅建议内网部署使用。
   //     更安全的方式：用 KB_QUERY_LINK 环境变量向工具进程直供链接，勿暴露该接口。
   app.use('/api/agent-config', agentConfigRouter);
+
+  // 1.6 知识库资源透传代理（免鉴权，须在鉴权中间件之前）
+  //     原因：AI 回复里知识库图片为相对路径 /api/ext/...，浏览器按当前源解析即打到本服务；
+  //     而 <img> 请求不携带 Authorization 头（token 存 localStorage）→ 走鉴权必 401 破图。
+  //     安全边界见 routes/ext-proxy.routes.ts（origin 取自配置，前缀固定，非开放代理）。
+  app.use('/api/ext', extProxyRouter);
 
   // 2. 认证中间件（保护后续 /api/* 路由）
   app.use('/api', createAuthMiddleware());

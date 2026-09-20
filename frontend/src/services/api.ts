@@ -11,6 +11,20 @@ function authHeaders(): Record<string, string> {
   return headers;
 }
 
+/**
+ * AbortSignal.timeout 的兼容实现。
+ * 原生 API 需 Chrome 103+，老内核（如深度浏览器 Chromium 93）无此方法，直接调用会同步抛
+ * TypeError 并被调用方 catch 成用户可见的报错文案。降级走 AbortController + setTimeout：
+ * abort() 不传 reason（Chromium 93 同样不支持 abort(reason)），抛出的 AbortError 与原生
+ * TimeoutError 一样落入调用方的 'TimeoutError' || 'AbortError' 分支，超时文案无需改动。
+ */
+function timeoutSignal(ms: number): AbortSignal {
+  if (typeof AbortSignal.timeout === 'function') return AbortSignal.timeout(ms);
+  const ctrl = new AbortController();
+  setTimeout(() => ctrl.abort(), ms);
+  return ctrl.signal;
+}
+
 export async function listSessions() {
   const res = await fetch(apiUrl('/api/sessions'), { headers: authHeaders() });
   if (!res.ok) throw new Error('获取会话列表失败');
@@ -161,7 +175,7 @@ export async function testModelConnection(
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({ baseUrl, model, apiKey }),
-      signal: AbortSignal.timeout(10000),
+      signal: timeoutSignal(10000),
     });
     return res.json();
   } catch (e: any) {
@@ -178,7 +192,7 @@ export async function testConnection(mode?: 'chat' | 'agent'): Promise<{ success
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({ mode }),
-      signal: AbortSignal.timeout(3000),
+      signal: timeoutSignal(3000),
     });
     return res.json();
   } catch (e: any) {
@@ -433,7 +447,7 @@ export async function testExternalService(
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify(target),
-      signal: AbortSignal.timeout(10000),
+      signal: timeoutSignal(10000),
     });
     return res.json();
   } catch (e: any) {

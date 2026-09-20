@@ -6,6 +6,7 @@ import { ToolCallGroup } from '../agent/ToolCallGroup';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { RegenerateButton } from '../agent/RegenerateButton';
 import { useChatStore } from '../../store/chat-store';
+import { openImageOverlay } from '../../utils/image-overlay';
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -102,14 +103,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                     src={`data:${img.mimeType};base64,${img.data}`}
                     alt={`附件图片 ${i + 1}`}
                     className="message-image-thumb"
-                    onClick={() => {
-                      const overlay = document.getElementById('imageOverlay');
-                      const overlayImg = document.getElementById('overlayImg') as HTMLImageElement;
-                      if (overlay && overlayImg) {
-                        overlayImg.src = `data:${img.mimeType};base64,${img.data}`;
-                        overlay.classList.add('active');
-                      }
-                    }}
+                    onClick={() => openImageOverlay(`data:${img.mimeType};base64,${img.data}`)}
                   />
                 ))}
               </div>

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useChatStore } from '../../store/chat-store';
 import { SettingsModal } from './SettingsModal';
-import { ModeSwitch } from '../input/ModeSwitch';
 import {
   getTheme,
   setTheme,
@@ -55,7 +54,6 @@ export function Header() {
               />
             ))}
           </div>
-          <ModeSwitch />
         </div>
         <div className="header-right">
           <button

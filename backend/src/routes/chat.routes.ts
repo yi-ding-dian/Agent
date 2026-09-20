@@ -14,7 +14,7 @@ chatRouter.post('/chat', async (req: Request, res: Response): Promise<void> => {
     return;
   }
   const userId = req.user!.id;
-  const { message, sessionId, mode, systemPrompt, name, rebuild, history, modelOverrides, images } = req.body as {
+  const { message, sessionId, mode, systemPrompt, name, rebuild, history, modelOverrides, images, plan } = req.body as {
     message?: string;
     sessionId?: string;
     mode?: 'chat' | 'agent';
@@ -24,6 +24,8 @@ chatRouter.post('/chat', async (req: Request, res: Response): Promise<void> => {
     history?: { role: string; content: string }[];
     modelOverrides?: { id?: string; baseUrl?: string; apiKey?: string; thinkingLevel?: string; maxTokens?: number };
     images?: { type: string; data: string; mimeType: string }[];
+    /** 规划模式：只读调研（工具面收窄 + 规划约束注入），单轮生效 */
+    plan?: boolean;
   };
 
   if (!message || typeof message !== 'string') {
@@ -172,7 +174,7 @@ chatRouter.post('/chat', async (req: Request, res: Response): Promise<void> => {
   }
 
   // 异步执行消息处理（经 input 钩子转换后的文本）
-  session.processMessage(effectiveMessage, images as any).catch((err: unknown) => {
+  session.processMessage(effectiveMessage, images as any, { plan: plan === true }).catch((err: unknown) => {
     console.error('[ChatRoute] processMessage error:', err);
   });
 });

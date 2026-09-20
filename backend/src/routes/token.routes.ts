@@ -78,11 +78,17 @@ tokenRouter.get('/sessions/:id/tokens', (req: Request, res: Response): void => {
   // 内存会话取 session.model.maxTokens；DB-only 会话用该用户全局默认模型的 maxTokens，无则回落默认。
   let modelMaxTokens = config.defaultMaxTokens;
   const memSession = mgr.getSession(sessionId);
+  // 当前会话实际使用的模型名（前端 TokenBar 显示在「累计消耗」之前）：
+  // 内存会话权威取 session.model.id —— 该值由创建/重建会话时的 modelOverrides → 全局默认模型解析而来；
+  // DB-only 会话（刷新后尚未重建）无会话级模型记录，回落该用户的全局默认模型 id。
+  // 注意与下方 maxTokens 分支解耦：model.id 存在但 maxTokens 缺失时，模型名仍应照常返回。
+  let modelName: string = (memSession as any)?.model?.id ?? '';
   if (memSession && (memSession as any).model?.maxTokens) {
     modelMaxTokens = (memSession as any).model.maxTokens;
   } else {
     const global = getGlobalModel(userId);
     if (global?.id) {
+      if (!modelName) modelName = global.id;
       try {
         modelMaxTokens = createQwenModel(global).maxTokens ?? config.defaultMaxTokens;
       } catch {
@@ -90,7 +96,7 @@ tokenRouter.get('/sessions/:id/tokens', (req: Request, res: Response): void => {
       }
     }
   }
-  res.json({ ...usage, maxTokens: modelMaxTokens });
+  res.json({ ...usage, maxTokens: modelMaxTokens, model: modelName || undefined });
 });
 
 /** 手动触发压缩（支持 DB-only 持久化会话） */

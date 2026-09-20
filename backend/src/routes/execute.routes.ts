@@ -16,10 +16,12 @@ executeRouter.post('/execute', async (req: Request, res: Response): Promise<void
     return;
   }
   const userId = req.user!.id;
-  const { instruction, sessionId, modelOverrides } = req.body as {
+  const { instruction, sessionId, modelOverrides, plan } = req.body as {
     instruction?: string;
     sessionId?: string;
     modelOverrides?: { id?: string; baseUrl?: string; apiKey?: string; thinkingLevel?: string; maxTokens?: number };
+    /** 规划模式：只读调研（工具面收窄 + 规划约束注入），单轮生效 */
+    plan?: boolean;
   };
 
   if (!instruction || typeof instruction !== 'string') {
@@ -103,7 +105,7 @@ executeRouter.post('/execute', async (req: Request, res: Response): Promise<void
   });
 
   // 异步执行（经 input 钩子转换后的指令）
-  session.processMessage(effectiveInstruction).catch((err: unknown) => {
+  session.processMessage(effectiveInstruction, undefined, { plan: plan === true }).catch((err: unknown) => {
     console.error('[ExecuteRoute] processMessage error:', err);
   });
 });

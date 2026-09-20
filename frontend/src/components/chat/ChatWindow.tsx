@@ -6,6 +6,7 @@ import { QuestionPanel } from './QuestionPanel';
 import { InputBar } from '../input/InputBar';
 import { Header } from '../layout/Header';
 import { ConfirmationDialog } from '../agent/ConfirmationDialog';
+import { PlanCard } from './PlanCard';
 import { ExtensionUIDialog } from '../agent/ExtensionUIDialog';
 import { TokenBar } from '../agent/TokenBar';
 import { QueueIndicator } from '../input/QueueIndicator';
@@ -237,6 +238,8 @@ export function ChatWindow() {
               )}
             </div>
           </div>
+          {/* 规划模式卡片：贴在输入框上方 */}
+          <PlanCard />
           {/* 操作确认条：贴在输入框上方（与对话区同宽，不延伸到右侧面板下方） */}
           <ConfirmationDialog />
           <InputBar />
