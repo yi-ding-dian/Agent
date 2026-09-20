@@ -1,0 +1,611 @@
+/* ========================================
+   TokenBar / 队列指示 / 附件预览 / 消息图片 / 限流警告 / 扩展UI + 历史问题面板 + 侧边面板 tab
+   —— 原 index.css 第 3399-4003 行
+   ⚠️ 在 index.css 的 @import 顺序即 CSS 层叠顺序，调整顺序前先确认覆盖关系
+   ======================================== */
+
+/* ─── 新增组件样式 ──────────────────────────────────────── */
+
+/* RegenerateButton */
+.regenerate-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.regenerate-btn:hover { color: var(--accent); background: var(--bg-hover); }
+.regenerate-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* CommandOutputStream */
+.cmd-output-container {
+  margin-top: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.cmd-output {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 8px 12px;
+  margin: 0;
+  font-size: 12px;
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  white-space: pre-wrap;
+  max-height: 300px;
+  overflow-y: auto;
+  line-height: 1.4;
+}
+.cmd-streaming-indicator {
+  display: block;
+  padding: 4px 12px;
+  background: #2d2d2d;
+  color: #4ec9b0;
+  font-size: 11px;
+  animation: pulse 1.5s infinite;
+}
+
+/* Extension UI Bar */
+.ext-ui-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  font-size: 14px;
+  flex-wrap: wrap;
+}
+.ext-ui-bar.confirm-bar { border-color: var(--warning); background: var(--warning-bg); }
+.ext-ui-bar input[type="text"] {
+  flex: 1;
+  min-width: 150px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 14px;
+}
+.ext-ui-actions { display: flex; gap: 6px; margin-left: auto; }
+.ext-ui-actions button { padding: 4px 12px; border-radius: 4px; border: 1px solid var(--border); cursor: pointer; font-size: 13px; }
+.ext-ui-actions .btn-confirm { background: var(--accent); color: #fff; border-color: var(--accent); }
+.ext-ui-actions .btn-cancel { background: var(--bg-primary); }
+.ext-ui-actions .btn-option { background: var(--bg-primary); }
+
+/* Rate Limit Warning */
+.rate-limit-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  margin: 6px 0;
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--warning-fg);
+}
+.rate-limit-countdown { font-weight: 600; color: var(--warning-fg); }
+.rate-limit-warning button { background: none; border: none; cursor: pointer; color: var(--warning-fg); font-weight: bold; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ─── TokenBar ─────────────────────────────────────────── */
+
+.token-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 6px 14px;
+  background: transparent;
+  border-top: none;
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+.token-bar-text { white-space: nowrap; }
+.token-safe { color: #4caf50; font-weight: 600; }
+.token-warning { color: #ff9800; font-weight: 600; }
+.token-danger { color: #f44336; font-weight: 600; }
+.token-compact-btn {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.token-compact-btn:hover { background: var(--accent); color: #fff; }
+.token-compact-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+/* 压缩失败提示（按钮旁红字，透传后端 message） */
+.token-compact-error {
+  margin-left: 4px;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ─── QueueIndicator ───────────────────────────────────── */
+
+.queue-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: var(--info-bg);
+  border-bottom: 1px solid var(--info-border);
+  font-size: 12px;
+  color: var(--info-fg);
+  transition: background 0.3s, border-color 0.3s, color 0.3s;
+}
+.queue-indicator--partial {
+  background: var(--success-bg);
+  border-bottom-color: var(--success-border);
+  color: var(--success-fg);
+}
+.queue-indicator--done {
+  background: var(--success-bg);
+  border-bottom-color: var(--success-border);
+  color: var(--success-fg);
+}
+.queue-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--info-fg);
+  animation: pulse 1s infinite;
+}
+.queue-dot--green {
+  background: var(--success);
+  animation: none;
+}
+
+/* ─── 排队输入模式 ────────────────────────────────────── */
+
+.input-textarea.queuing {
+  border-color: var(--info-border);
+  background: var(--info-bg);
+}
+.send-btn.stop {
+  background: var(--danger);
+  color: #fff;
+}
+.send-btn.stop:hover {
+  background: color-mix(in srgb, var(--danger) 80%, #000);
+}
+.send-btn.queuing {
+  background: #3b82f6;
+  color: #fff;
+}
+.send-btn.queuing:hover {
+  background: #2563eb;
+}
+
+/* ─── 附件预览区 ────────────────────────────────────── */
+
+.attachment-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px 0;
+  max-width: 100%;
+}
+
+.attachment-thumb {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.attachment-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.attachment-remove-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 12px;
+  line-height: 20px;
+  text-align: center;
+  cursor: pointer;
+  border-radius: 0 8px 0 4px;
+  padding: 0;
+  transition: background 0.15s;
+}
+.attachment-remove-btn:hover {
+  background: rgba(220, 38, 38, 0.85);
+}
+
+/* ─── 消息中的图片 ──────────────────────────────────── */
+
+.message-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.message-image-thumb {
+  max-width: 200px;
+  max-height: 160px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  object-fit: cover;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.message-image-thumb:hover {
+  transform: scale(1.02);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* ─── 图片放大遮罩 ──────────────────────────────────── */
+
+.image-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 9999;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+}
+.image-overlay.active {
+  display: flex;
+}
+
+/* 图片链接悬停预览浮层（见 utils/image-hover-preview.ts） */
+.image-hover-preview {
+  display: none;
+  position: fixed;
+  z-index: 9999;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  /* 不吃鼠标事件：跟随移动时不会挡住链接进而触发 mouseout 抖动 */
+  pointer-events: none;
+}
+.image-hover-preview.active {
+  display: block;
+}
+.image-hover-preview img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 352px;
+  max-height: 272px;
+  border-radius: 4px;
+}
+.image-hover-preview-status {
+  display: block;
+  padding: 14px 18px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.image-overlay img {
+  max-width: 90vw;
+  max-height: 90vh;
+  border-radius: 8px;
+  object-fit: contain;
+}
+
+/* ---- 小屏适配：设置弹窗全屏化，左栏收窄，避免内容挤压 ---- */
+@media (max-width: 768px) {
+  .settings-modal {
+    width: 95vw;
+    height: 90vh;
+    min-width: 0;
+    max-height: none;
+  }
+  .settings-nav {
+    width: 140px;
+  }
+}
+
+/* ---- 模型连接失败错误提示块（assistant 消息内） ---- */
+.error-banner {
+  margin: 4px 0 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--danger-border);
+  background-color: var(--danger-bg);
+  color: var(--danger-fg);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.error-banner-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--danger-fg);
+}
+
+.error-banner-icon {
+  font-size: 14px;
+}
+
+.error-banner-reason {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background-color: var(--bg-primary);
+  color: var(--text-secondary);
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+.error-banner-advice {
+  margin-top: 6px;
+  color: var(--danger-fg);
+  opacity: 0.9;
+}
+
+/* ========================================
+   历史问题面板（对话区右侧）
+   平时半透明，鼠标滑过不透明；全部走 CSS 变量，深色主题自动适配
+   ======================================== */
+.chat-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+/* 左列：对话区 + 输入框同宽（输入框不延伸到右侧面板下方） */
+.chat-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.question-panel {
+  width: 220px;
+  flex-shrink: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 12px;
+  border-left: 1px solid transparent;
+  background: color-mix(in srgb, var(--bg-secondary) 72%, transparent);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+/* 鼠标滑过面板：背景不透明、左边框实化 */
+.question-panel:hover {
+  background: var(--bg-secondary);
+  border-left-color: var(--border);
+}
+
+.question-panel-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.05em;
+  padding: 0 6px 10px;
+  border-bottom: 1px solid var(--border-light);
+  margin-bottom: 10px;
+}
+
+.question-panel-empty {
+  padding: 24px 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.question-panel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.question-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border: 1px solid transparent;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.question-item:hover {
+  background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--text-primary);
+}
+
+/* 当前问题（最后一条 user 消息）高亮 */
+.question-item.active {
+  color: var(--accent);
+  font-weight: 600;
+  background-color: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+/* 小屏隐藏：避免挤压对话区（默认窗口 1400px 可显示） */
+@media (max-width: 1100px) {
+  .question-panel {
+    display: none;
+  }
+}
+
+
+/* ========================================
+   侧边面板 tab（历史问题 / Agent列表）
+   与 question-panel 同区，复用现有 CSS 变量
+   ======================================== */
+.side-panel-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 6px 10px;
+  border-bottom: 1px solid var(--border-light);
+  margin-bottom: 10px;
+  position: relative;
+}
+
+/* 子Agent列表关闭按钮（仅隐藏显示，不影响任务运行） */
+.side-panel-close {
+  position: absolute;
+  right: 4px;
+  top: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--text-muted);
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.side-panel-close:hover {
+  background-color: var(--bg-hover);
+  color: var(--danger);
+}
+
+.side-panel-tab {
+  flex: 1;
+  padding: 5px 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: center;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.side-panel-tab:hover {
+  background-color: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--text-primary);
+}
+
+.side-panel-tab.active {
+  color: var(--accent);
+  font-weight: 600;
+  background-color: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+/* Agent 列表 */
+.agent-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.agent-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  padding: 7px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.agent-item:hover {
+  background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.agent-item-index {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* 状态徽标（列表 + 弹窗共用） */
+.agent-status-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.agent-status-badge.running {
+  color: var(--warning);
+  background-color: var(--warning-bg);
+}
+
+.agent-status-badge.completed {
+  color: var(--success-fg);
+  background-color: var(--success-bg);
+}
+
+.agent-status-badge.error {
+  color: var(--danger);
+  background-color: var(--danger-bg);
+}
+
+.agent-item-task {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-item-duration {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: monospace;
+  white-space: nowrap;
+}
+

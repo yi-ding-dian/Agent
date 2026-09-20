@@ -1,0 +1,247 @@
+/* ========================================
+   CSS 变量 + 5 套主题（浅色/深色/海洋蓝/森林绿/紫罗兰）
+   —— 原 index.css 第 1-241 行
+   ⚠️ 在 index.css 的 @import 顺序即 CSS 层叠顺序，调整顺序前先确认覆盖关系
+   ======================================== */
+
+/* ========================================
+   PiAgent 全局样式
+   ======================================== */
+
+/* ---- CSS 变量（浅色主题） ---- */
+:root {
+  --bg-primary: #f5f5f0;
+  --bg-secondary: #ffffff;
+  --text-primary: #1a1a1a;
+  --text-secondary: #6b7280;
+  --accent: #c8853f;
+  --accent-hover: #b07330;
+  --border: #e0ddd5;
+  --border-light: #f0ede5;
+  --danger: #ef4444;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --user-bubble-bg: #dcfce7;
+  --assistant-bubble-bg: #ffffff;
+  --code-bg: #ffffff; /* 代码块内容背景（浅色；深色主题覆盖为深色） */
+  --sidebar-bg: #fafaf7;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --transition: 0.2s ease;
+
+  /* ---- 补充变量（此前部分被组件引用但未定义；各主题可覆盖） ---- */
+  --surface: #ffffff;
+  --text-muted: #9ca3af;
+  --bg-card: #ffffff;
+  --bg-hover: #f0ede5;
+  --input-bg: #fafaf7;
+  --focus-ring: rgba(200, 133, 63, 0.15);
+  --badge-chat-bg: #dbeafe;
+  --badge-chat-fg: #1d4ed8;
+  --badge-agent-bg: #fef3c7;
+  --badge-agent-fg: #b45309;
+  --code-header-bg: #f5f5f0;
+  --code-line-bg: #fafaf8;
+  --code-text: #1a1a1a;
+  --cmd-bg: #1e293b; /* 命令预览深底 */
+  --cmd-fg: #e2e8f0;
+  --danger-bg: rgba(239, 68, 68, 0.1);
+  --danger-border: rgba(239, 68, 68, 0.3);
+  --danger-fg: #dc2626;
+  --success-bg: rgba(34, 197, 94, 0.1);
+  --success-border: rgba(34, 197, 94, 0.3);
+  --success-fg: #15803d;
+  --warning-bg: #fffbeb;
+  --warning-border: #fde68a;
+  --warning-fg: #92400e;
+  --info-bg: #eff6ff;
+  --info-border: #bfdbfe;
+  --info-fg: #1e40af;
+  --off-bg: #e2e8f0;
+  --thinking-bg: #fdfaf3;
+  --thinking-header-bg: #faf5eb;
+  --thinking-header-fg: #8b7355;
+  --thinking-border: #d4c5a0;
+  --thinking-hover: #f5edd9;
+  --thinking-text: #6b5e4a;
+  --thinking-code-bg: #f5f0e5;
+  --login-bg-1: #f0f2f5;
+  --login-bg-2: #e8ecf1;
+}
+
+/* ========================================
+   主题覆盖组（data-theme 切换，全部变量随主题联动）
+   ======================================== */
+
+/* ---- 主题：深色（深灰黑底、浅色文字、暗色气泡与代码块、深色边框） ---- */
+[data-theme='dark'] {
+  --bg-primary: #111827;
+  --bg-secondary: #1f2937;
+  --text-primary: #f3f4f6;
+  --text-secondary: #9ca3af;
+  --accent: #d9965a;
+  --accent-hover: #e0a86f;
+  --border: #374151;
+  --border-light: #2b3441;
+  --danger: #f87171;
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --user-bubble-bg: #14532d;
+  --assistant-bubble-bg: #1f2937;
+  --code-bg: #0f172a;
+  --sidebar-bg: #111827;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5);
+
+  --surface: #1f2937;
+  --text-muted: #6b7280;
+  --bg-card: #1f2937;
+  --bg-hover: #2b3441;
+  --input-bg: #111827;
+  --focus-ring: rgba(217, 150, 90, 0.25);
+  --badge-chat-bg: #1e3a5f;
+  --badge-chat-fg: #93c5fd;
+  --badge-agent-bg: #451a03;
+  --badge-agent-fg: #fcd34d;
+  --code-header-bg: #1e293b;
+  --code-line-bg: #182235;
+  --code-text: #e2e8f0;
+  --cmd-bg: #0f172a;
+  --cmd-fg: #e2e8f0;
+  --danger-bg: rgba(248, 113, 113, 0.12);
+  --danger-border: rgba(248, 113, 113, 0.35);
+  --danger-fg: #fca5a5;
+  --success-bg: rgba(74, 222, 128, 0.12);
+  --success-border: rgba(74, 222, 128, 0.35);
+  --success-fg: #86efac;
+  --warning-bg: rgba(251, 191, 36, 0.12);
+  --warning-border: rgba(251, 191, 36, 0.35);
+  --warning-fg: #fcd34d;
+  --info-bg: rgba(96, 165, 250, 0.12);
+  --info-border: rgba(96, 165, 250, 0.35);
+  --info-fg: #93c5fd;
+  --off-bg: #374151;
+  --thinking-bg: #1c1917;
+  --thinking-header-bg: #231f1a;
+  --thinking-header-fg: #c2a88a;
+  --thinking-border: #3a332a;
+  --thinking-hover: #2a241d;
+  --thinking-text: #b5a48c;
+  --thinking-code-bg: #262119;
+  --login-bg-1: #111827;
+  --login-bg-2: #1a2332;
+}
+/* 深色下无边框浮层补边框，避免与背景融为一体 */
+[data-theme='dark'] .modal,
+[data-theme='dark'] .login-card {
+  border: 1px solid var(--border);
+}
+
+/* ---- 主题：海洋蓝（浅蓝白底、蓝色 accent、蓝调边框与气泡） ---- */
+[data-theme='ocean'] {
+  --bg-primary: #eef4fb;
+  --bg-secondary: #ffffff;
+  --text-primary: #1e293b;
+  --text-secondary: #5b6b83;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --border: #d5e2f2;
+  --border-light: #e8f0fa;
+  --danger: #ef4444;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --user-bubble-bg: #dbeafe;
+  --assistant-bubble-bg: #ffffff;
+  --code-bg: #ffffff;
+  --sidebar-bg: #f4f8fd;
+
+  --surface: #ffffff;
+  --text-muted: #8ea0b8;
+  --bg-card: #ffffff;
+  --bg-hover: #e8f0fa;
+  --input-bg: #f4f8fd;
+  --focus-ring: rgba(37, 99, 235, 0.18);
+  --badge-chat-bg: #bfdbfe;
+  --badge-chat-fg: #1e40af;
+  --badge-agent-bg: #fef3c7;
+  --badge-agent-fg: #b45309;
+  --code-header-bg: #f2f6fc;
+  --code-line-bg: #f7fafd;
+  --code-text: #1e293b;
+  --login-bg-1: #e8f1fb;
+  --login-bg-2: #dce9f8;
+}
+
+/* ---- 主题：森林绿（浅绿米底、绿色 accent、绿调气泡） ---- */
+[data-theme='forest'] {
+  --bg-primary: #eef4ec;
+  --bg-secondary: #ffffff;
+  --text-primary: #1f2a1f;
+  --text-secondary: #5d6f5d;
+  --accent: #16a34a;
+  --accent-hover: #15803d;
+  --border: #d8e3d4;
+  --border-light: #eaf1e7;
+  --danger: #ef4444;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --user-bubble-bg: #d9f2e0;
+  --assistant-bubble-bg: #ffffff;
+  --code-bg: #ffffff;
+  --sidebar-bg: #f2f7f0;
+
+  --surface: #ffffff;
+  --text-muted: #8ea08e;
+  --bg-card: #ffffff;
+  --bg-hover: #eaf1e7;
+  --input-bg: #f4f8f2;
+  --focus-ring: rgba(22, 163, 74, 0.18);
+  --badge-chat-bg: #d1f2dd;
+  --badge-chat-fg: #15803d;
+  --badge-agent-bg: #fef3c7;
+  --badge-agent-fg: #b45309;
+  --code-header-bg: #f1f6ee;
+  --code-line-bg: #f7faf5;
+  --code-text: #1f2a1f;
+  --login-bg-1: #eaf2e8;
+  --login-bg-2: #dceade;
+}
+
+/* ---- 主题：紫罗兰（浅紫底、紫色 accent、紫调气泡） ---- */
+[data-theme='violet'] {
+  --bg-primary: #f3f0fa;
+  --bg-secondary: #ffffff;
+  --text-primary: #2a2438;
+  --text-secondary: #6a6180;
+  --accent: #7c3aed;
+  --accent-hover: #6d28d9;
+  --border: #e1daf0;
+  --border-light: #efeaf8;
+  --danger: #ef4444;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --user-bubble-bg: #ede9fe;
+  --assistant-bubble-bg: #ffffff;
+  --code-bg: #ffffff;
+  --sidebar-bg: #f6f3fc;
+
+  --surface: #ffffff;
+  --text-muted: #978cab;
+  --bg-card: #ffffff;
+  --bg-hover: #efeaf8;
+  --input-bg: #f6f3fc;
+  --focus-ring: rgba(124, 58, 237, 0.18);
+  --badge-chat-bg: #e0e7ff;
+  --badge-chat-fg: #4338ca;
+  --badge-agent-bg: #fef3c7;
+  --badge-agent-fg: #b45309;
+  --code-header-bg: #f3effb;
+  --code-line-bg: #f8f6fd;
+  --code-text: #2a2438;
+  --login-bg-1: #f1edf9;
+  --login-bg-2: #e6e0f5;
+}
+

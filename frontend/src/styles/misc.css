@@ -1,0 +1,215 @@
+/* ========================================
+   全局 Toast + PlanCard + ModeMenu
+   —— 原 index.css 第 4429-4637 行
+   ⚠️ 在 index.css 的 @import 顺序即 CSS 层叠顺序，调整顺序前先确认覆盖关系
+   ======================================== */
+
+/* ─── 全局 Toast 提示（鼠标右侧、自动淡出） ─── */
+.toast-host {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10000;
+}
+
+.toast-item {
+  position: fixed;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px 10px 10px;
+  border-radius: 8px;
+  /* 半透明毛玻璃底（随主题）+ 极淡投影：可读但不遮内容 */
+  background: color-mix(in srgb, var(--bg-card) 72%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.5;
+  pointer-events: auto;
+  cursor: pointer;
+  animation: toast-in 0.18s ease-out;
+}
+
+.toast-item.leaving {
+  animation: toast-out 0.3s ease forwards;
+}
+
+.toast-icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  margin-top: 1px;
+}
+
+.toast-item.success .toast-icon { background: #34c759; }
+.toast-item.error .toast-icon { background: #ff5f57; }
+.toast-item.info .toast-icon { background: #4da3ff; }
+
+.toast-message {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  word-break: break-all;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes toast-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(-8px); }
+}
+
+/* ─── 规划模式卡片（PlanCard：只读调研完成后展示在输入区上方） ─── */
+.plan-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  margin: 0 16px 8px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  box-shadow: var(--shadow-md);
+}
+
+.plan-card-header {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.plan-card-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.mode-switch-btn.plan {
+  color: var(--accent);
+}
+.mode-switch-btn.plan.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ─── 模式选择器（ModeMenu：点击按钮向上弹出模式菜单） ─── */
+.mode-menu {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.mode-menu-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--transition);
+}
+
+.mode-menu-btn:hover {
+  border-color: var(--accent);
+}
+
+.mode-menu-btn .mode-menu-chevron {
+  font-size: 10px;
+  color: var(--text-secondary);
+  transition: transform 0.15s ease;
+}
+
+.mode-menu-btn.open .mode-menu-chevron {
+  transform: rotate(180deg);
+}
+
+.mode-menu-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 59;
+}
+
+.mode-menu-popup {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 0;
+  z-index: 60;
+  min-width: 230px;
+  padding: 6px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  transform-origin: bottom left;
+  animation: menu-up 0.15s ease-out;
+}
+
+@keyframes menu-up {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+.mode-menu-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 9px 12px;
+  border-radius: 6px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mode-menu-item:hover {
+  background: var(--bg-hover);
+}
+
+.mode-menu-item.active {
+  background: var(--accent);
+}
+
+.mode-menu-item.active .mode-menu-item-label {
+  color: #fff;
+}
+
+.mode-menu-item.active .mode-menu-item-desc {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.mode-menu-item-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.mode-menu-item-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+/* Agent 子模式区与主模式之间的分割线 */
+.mode-menu-divider {
+  height: 1px;
+  margin: 5px 4px;
+  background: var(--border-light);
+}

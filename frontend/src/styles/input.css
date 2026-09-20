@@ -1,0 +1,500 @@
+/* ========================================
+   输入栏 / 命令联想浮层 / 模型选择浮层 / 模式切换 / 停止按钮 / 错误提示 / Markdown 渲染 / 滚动条
+   —— 原 index.css 第 1371-1864 行
+   ⚠️ 在 index.css 的 @import 顺序即 CSS 层叠顺序，调整顺序前先确认覆盖关系
+   ======================================== */
+
+/* ---- 输入栏 ---- */
+.input-bar {
+  position: relative; /* 模型选择浮层（/model 命令）以此为定位容器 */
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  background: linear-gradient(to top, var(--bg-secondary), transparent);
+}
+
+.input-bar-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.input-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background-color: var(--bg-secondary);
+  padding: 4px;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+/* ---- 命令联想浮层（输入 / 立即弹出）---- */
+.command-picker-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 49;
+}
+
+.command-picker {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 20px;
+  right: 20px;
+  z-index: 60;
+  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  padding: 10px 10px 6px;
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
+}
+
+.command-picker-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 2px 6px 8px;
+}
+
+.command-picker-list {
+  overflow-y: auto;
+}
+
+.command-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-bottom: 2px;
+}
+
+.command-picker-item.active {
+  background: color-mix(in srgb, var(--accent, #4f46e5) 12%, transparent);
+}
+
+.command-picker-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.command-picker-badge {
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent, #4f46e5) 16%, transparent);
+  color: var(--accent, #4f46e5);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.command-picker-desc {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-picker-hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.command-picker-empty {
+  padding: 14px 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.command-picker-footer {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 8px 0 2px;
+  border-top: 1px solid var(--border);
+  margin-top: 6px;
+}
+
+/* ---- 模型选择浮层（/model 命令） ---- */
+.model-picker-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 49;
+}
+
+.model-picker {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 20px;
+  right: 20px;
+  z-index: 60;
+  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  padding: 10px 10px 6px;
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
+}
+
+.model-picker-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 2px 6px 8px;
+}
+
+.model-picker-list {
+  overflow-y: auto;
+}
+
+.model-picker-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-bottom: 2px;
+}
+
+.model-picker-item.active {
+  background: color-mix(in srgb, var(--accent, #4f46e5) 12%, transparent);
+}
+
+.model-picker-item.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.model-picker-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.model-picker-model {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* 绿色圆点：检测可连接 */
+.model-picker-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background-color: #22c55e;
+  flex-shrink: 0;
+}
+
+.model-picker-badge {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: var(--success-bg);
+  color: var(--success-fg);
+  white-space: nowrap;
+}
+
+.model-picker-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.model-picker-checking {
+  color: var(--text-secondary);
+}
+
+.model-picker-fail {
+  color: var(--danger-fg);
+}
+
+.model-picker-empty {
+  padding: 14px 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.model-picker-hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 8px 0 2px;
+  border-top: 1px solid var(--border);
+  margin-top: 6px;
+}
+
+/* 切换成功后的轻提示（输入框上方，2.5s 自动消失） */
+.model-picker-tip {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 70;
+  background: var(--success-bg);
+  color: var(--success-fg);
+  border: 1px solid var(--success-border);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.input-wrapper:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+.input-textarea {
+  flex: 1;
+  border: none;
+  outline: none;
+  resize: none;
+  padding: 8px 12px;
+  max-height: 200px;
+  background: transparent;
+  line-height: 1.5;
+  font-size: 14px;
+}
+
+.send-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: background-color var(--transition), opacity var(--transition);
+  flex-shrink: 0;
+}
+
+.send-btn:hover {
+  background-color: var(--accent-hover);
+}
+
+.send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---- 模式切换 ---- */
+.mode-switch {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.mode-switch-btn {
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background-color var(--transition), color var(--transition);
+  color: var(--text-secondary);
+}
+
+.mode-switch-btn.active {
+  background-color: var(--accent);
+  color: #fff;
+}
+
+.mode-switch-btn:not(.active):hover {
+  background-color: var(--bg-primary);
+}
+
+/* ---- 停止按钮 ---- */
+.stop-btn {
+  padding: 6px 16px;
+  border-radius: var(--radius-sm);
+  background-color: var(--danger);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background-color var(--transition);
+}
+
+.stop-btn:hover {
+  background-color: color-mix(in srgb, var(--danger) 80%, #000);
+}
+
+/* ---- 错误提示 ---- */
+.error-bar {
+  padding: 8px 16px;
+  background-color: var(--danger-bg);
+  color: var(--danger);
+  font-size: 13px;
+  border-bottom: 1px solid var(--danger-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.error-close-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--danger);
+  font-size: 14px;
+}
+
+.error-close-btn:hover {
+  background-color: var(--danger-bg);
+}
+
+/* ---- Markdown 渲染内容 ---- */
+.message-bubble .markdown-content {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.message-bubble .markdown-content img {
+  max-width: 100%;
+  height: auto;
+  cursor: zoom-in;
+}
+
+.message-bubble .markdown-content p {
+  margin-bottom: 8px;
+}
+
+.message-bubble .markdown-content p:last-child {
+  margin-bottom: 0;
+}
+
+.message-bubble .markdown-content ul,
+.message-bubble .markdown-content ol {
+  padding-left: 20px;
+  margin-bottom: 8px;
+}
+
+.message-bubble .markdown-content li {
+  margin-bottom: 4px;
+}
+
+.message-bubble .markdown-content h1,
+.message-bubble .markdown-content h2,
+.message-bubble .markdown-content h3,
+.message-bubble .markdown-content h4 {
+  margin-top: 12px;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.message-bubble .markdown-content h1 { font-size: 18px; }
+.message-bubble .markdown-content h2 { font-size: 16px; }
+.message-bubble .markdown-content h3 { font-size: 15px; }
+
+.message-bubble .markdown-content blockquote {
+  border-left: 3px solid var(--accent);
+  padding-left: 12px;
+  margin: 8px 0;
+  color: var(--text-secondary);
+}
+
+.message-bubble .markdown-content table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  width: 100%;
+  font-size: 13px;
+}
+
+.message-bubble .markdown-content th,
+.message-bubble .markdown-content td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.message-bubble .markdown-content th {
+  background-color: var(--bg-primary);
+  font-weight: 600;
+}
+
+.message-bubble .markdown-content hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 12px 0;
+}
+
+.message-bubble .markdown-content code:not(pre code) {
+  background-color: rgba(0, 0, 0, 0.06);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 13px;
+}
+
+/* ---- 滚动条 ---- */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-muted);
+}
+
+/* ---- 设置按钮 ---- */
+.settings-btn {
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  font-size: 16px;
+  color: var(--text-secondary);
+  transition: background-color var(--transition), color var(--transition);
+}
+
+.settings-btn:hover {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* ---- 会话重命名输入框 ---- */
+.session-rename-input {
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  outline: none;
+}
+

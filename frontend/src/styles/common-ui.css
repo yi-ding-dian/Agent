@@ -1,0 +1,504 @@
+/* ========================================
+   通用件：Toggle / 按钮 / 加载中 / 危险确认弹窗 / 系统消息 / 操作确认栏 / 目录切换提示 / 拖放反馈 / 目录浏览器
+   —— 原 index.css 第 2644-3141 行
+   ⚠️ 在 index.css 的 @import 顺序即 CSS 层叠顺序，调整顺序前先确认覆盖关系
+   ======================================== */
+
+/* Toggle 开关 */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.toggle-switch.small {
+  width: 36px;
+  height: 20px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--border);
+  border-radius: 24px;
+  transition: background 0.3s;
+}
+
+.toggle-slider::before {
+  content: "";
+  position: absolute;
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.3s;
+}
+
+.toggle-switch.small .toggle-slider::before {
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background: var(--accent);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(20px);
+}
+
+.toggle-switch.small input:checked + .toggle-slider::before {
+  transform: translateX(16px);
+}
+
+/* ---- 按钮 ---- */
+.btn {
+  padding: 8px 20px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color var(--transition), opacity var(--transition);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background-color: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--accent-hover);
+}
+
+.btn-secondary {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: var(--border);
+}
+
+/* ---- 测试结果 ---- */
+.test-result {
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.test-result.success {
+  background-color: var(--success-bg);
+  color: var(--success-fg);
+  border: 1px solid var(--success-border);
+}
+
+.test-result.error {
+  background-color: var(--danger-bg);
+  color: var(--danger-fg);
+  border: 1px solid var(--danger-border);
+}
+
+/* ---- 思考过程块 ---- */
+.thinking-block {
+  margin-bottom: 12px;
+  border: 1px solid var(--thinking-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background-color: var(--thinking-bg);
+}
+
+.thinking-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 12px;
+  color: var(--thinking-header-fg);
+  background-color: var(--thinking-header-bg);
+  border-bottom: 1px solid var(--thinking-border);
+}
+
+.thinking-header:hover {
+  background-color: var(--thinking-hover);
+}
+
+.thinking-chevron {
+  font-size: 10px;
+  width: 14px;
+  flex-shrink: 0;
+}
+
+.thinking-label {
+  font-weight: 500;
+}
+
+.thinking-content {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--thinking-text);
+  background-color: var(--thinking-bg);
+}
+
+.thinking-content p {
+  margin-bottom: 6px;
+}
+
+.thinking-content p:last-child {
+  margin-bottom: 0;
+}
+
+.thinking-content code {
+  background-color: color-mix(in srgb, var(--thinking-text) 8%, transparent);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.thinking-content pre {
+  background-color: var(--thinking-code-bg);
+  padding: 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  overflow-x: auto;
+}
+
+/* ---- 加载中 ---- */
+.loading-spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.loading-spinner-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--accent);
+  margin: 0 4px;
+  animation: bounce 1.4s ease-in-out infinite;
+}
+
+.loading-spinner-dot:nth-child(1) { animation-delay: 0s; }
+.loading-spinner-dot:nth-child(2) { animation-delay: 0.2s; }
+.loading-spinner-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes bounce {
+  0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+/* ---- 危险操作确认弹窗 ---- */
+.confirmation-modal {
+  min-width: 420px;
+  max-width: 520px;
+  border: 2px solid var(--warning);
+}
+
+.confirmation-modal .modal-header h2 {
+  color: var(--warning-fg);
+  font-size: 16px;
+}
+
+.confirmation-reason {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.confirmation-command {
+  padding: 10px 14px;
+  background: var(--cmd-bg);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+}
+
+.confirmation-command code {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 13px;
+  color: var(--cmd-fg);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.confirmation-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ---- 目录切换提示 ---- */
+.dir-notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background-color: var(--info-bg);
+  border-bottom: 1px solid var(--info-border);
+  color: var(--info-fg);
+  font-size: 14px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.dir-notice-close {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--text-secondary);
+  transition: background-color var(--transition);
+}
+
+.dir-notice-close:hover {
+  background-color: var(--info-bg);
+  color: var(--info-fg);
+}
+
+/* ---- 拖放视觉反馈 ---- */
+.chat-area.drag-over {
+  position: relative;
+}
+
+.drag-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--info-bg);
+  border: 3px dashed var(--info-fg);
+  border-radius: 8px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--info-fg);
+  pointer-events: none;
+}
+
+/* ---- 系统消息（工作目录切换等） ---- */
+.message-system {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 0;
+  margin: 16px 0;
+}
+
+.message-system-text {
+  display: inline-block;
+  padding: 8px 20px;
+  background: transparent;
+  border-radius: 20px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* ---- 操作确认栏（非模态，底部显示） ---- */
+.confirm-bar {
+  flex-shrink: 0;
+  padding: 10px 16px;
+  border-top: 2px solid var(--warning);
+  background: var(--warning-bg);
+}
+
+.confirm-bar-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.confirm-bar-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.confirm-bar-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--warning-fg);
+  white-space: nowrap;
+}
+
+.confirm-bar-reason {
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.confirm-bar-command {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 12px;
+  color: var(--cmd-fg);
+  background: var(--cmd-bg);
+  padding: 2px 8px;
+  border-radius: 3px;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.confirm-bar-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.btn-block {
+  background-color: var(--danger);
+  color: white;
+}
+
+/* ---- 目录浏览器 ---- */
+.input-with-btn {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.input-with-btn input {
+  flex: 1;
+}
+
+.dir-browser-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  border-radius: var(--radius-lg);
+}
+
+.dir-browser-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center; /* 标题居中，关闭按钮绝对定位右上角，与设置弹窗风格统一 */
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dir-browser-title {
+  margin: 0;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.dir-browser-header .modal-close-btn {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.dir-browser-path {
+  padding: 8px 16px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-light);
+  font-family: monospace;
+  word-break: break-all;
+}
+
+.dir-browser-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  min-height: 200px;
+}
+
+.dir-browser-item {
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background var(--transition);
+}
+
+.dir-browser-item:hover {
+  background: var(--bg-primary);
+}
+
+.dir-browser-dir {
+  font-weight: 500;
+  color: var(--accent);
+}
+
+.dir-browser-up {
+  color: var(--text-secondary);
+  font-style: italic;
+  border-bottom: 1px solid var(--border-light);
+  margin-bottom: 4px;
+}
+
+.dir-browser-file {
+  color: var(--text-primary);
+  cursor: default;
+}
+
+.dir-browser-loading,
+.dir-browser-error,
+.dir-browser-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.dir-browser-error {
+  color: var(--danger);
+}
+
+.dir-browser-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.btn-block:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--danger) 80%, #000);
+}
+

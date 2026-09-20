@@ -1,0 +1,263 @@
+/* ========================================
+   登录页 + 侧边栏用户信息 + 登录页设置面板
+   —— 原 index.css 第 3142-3398 行
+   ⚠️ 在 index.css 的 @import 顺序即 CSS 层叠顺序，调整顺序前先确认覆盖关系
+   ======================================== */
+
+/* ========================================
+   登录页面
+   ======================================== */
+.login-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, var(--login-bg-1) 0%, var(--login-bg-2) 100%);
+}
+
+.login-card {
+  width: 400px;
+  max-width: 90vw;
+  padding: 48px 40px;
+  background: var(--bg-card);
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
+}
+
+.login-title {
+  text-align: center;
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.login-subtitle {
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 36px;
+}
+
+.login-error {
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  border-radius: 8px;
+  color: var(--danger-fg);
+  font-size: 13px;
+  text-align: center;
+}
+
+.login-field {
+  margin-bottom: 20px;
+}
+
+.login-field label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.login-field input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 15px;
+  transition: border-color var(--transition);
+  background: var(--input-bg);
+  color: var(--text-primary);
+}
+
+.login-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.login-btn {
+  width: 100%;
+  padding: 13px;
+  margin-top: 10px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.login-btn:hover {
+  background: var(--accent-hover);
+}
+
+.login-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ========================================
+   侧边栏用户信息
+   ======================================== */
+.sidebar-user-info {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.sidebar-user-greeting {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.sidebar-user-last-visit {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.sidebar-logout-btn {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 6px 0;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.sidebar-logout-btn:hover {
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
+  color: var(--danger);
+}
+
+/* ========================================
+   登录页设置面板
+   ======================================== */
+.login-settings-toggle {
+  text-align: center;
+  margin-top: 20px;
+}
+
+.login-settings-link {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 12px;
+  transition: color var(--transition);
+}
+
+.login-settings-link:hover {
+  color: var(--accent);
+}
+
+.login-settings-panel {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.login-settings-panel .login-field {
+  margin-bottom: 12px;
+}
+
+.login-settings-msg {
+  font-size: 13px;
+  text-align: center;
+  margin-bottom: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+
+.login-settings-msg.success {
+  background: var(--success-bg);
+  color: var(--success-fg);
+}
+
+.login-settings-msg.error {
+  background: var(--danger-bg);
+  color: var(--danger-fg);
+}
+
+/* 服务器设置弹窗 */
+.login-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.login-modal {
+  background: var(--bg-card, #fff);
+  border-radius: 12px;
+  padding: 24px;
+  width: 360px;
+  max-width: 90vw;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+}
+
+.login-modal-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center; /* 标题居中，关闭按钮绝对定位右上角，与设置弹窗风格统一 */
+  margin-bottom: 16px;
+}
+
+.login-modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.login-modal-header .login-modal-close {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.login-modal-close {
+  background: none;
+  border: none;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 0 4px;
+}
+
+.login-modal-close:hover {
+  color: var(--danger);
+}
+
+.login-modal .login-field {
+  margin-bottom: 14px;
+}
+
+.login-modal-actions {
+  margin-top: 18px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.login-modal-actions .login-btn {
+  min-width: 120px;
+}
+

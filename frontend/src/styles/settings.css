@@ -1,0 +1,642 @@
+/* ========================================
+   设置弹窗：两栏布局 / 用户设置 / MCP / 模型预设 / 表单 / 推理深度滑块 / 思考开关
+   —— 原 index.css 第 2008-2643 行
+   ⚠️ 在 index.css 的 @import 顺序即 CSS 层叠顺序，调整顺序前先确认覆盖关系
+   ======================================== */
+
+/* ---- 设置弹窗固定尺寸（两栏布局 + 加宽；切换菜单/内容时尺寸不跳动） ---- */
+
+/* ---- 设置底部栏 ---- */
+.settings-bottom-bar {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  /* 背景与弹窗主体一致，避免内容透出显得透明 */
+  background: var(--bg-secondary);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ---- 设置两栏布局：左栏导航 + 右栏内容（旧顶部 tab 样式已移除） ---- */
+.settings-layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.settings-nav {
+  width: 200px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px;
+  border-right: 1px solid var(--border);
+  background: var(--bg-primary);
+  overflow-y: auto;
+}
+
+.settings-nav-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color var(--transition), background-color var(--transition);
+}
+
+.settings-nav-item:hover:not(.active) {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+}
+
+.settings-nav-item.active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent, #4f46e5) 12%, transparent);
+}
+
+/* ---- 用户设置 ---- */
+.user-settings {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.user-profile-card {
+  width: 100%;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 24px 0;
+}
+
+.user-avatar-section {
+  position: relative;
+}
+
+.user-avatar {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+  position: relative;
+  transition: opacity var(--transition);
+}
+
+.user-avatar:hover .user-avatar-overlay {
+  opacity: 1;
+}
+
+.user-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.user-avatar-letter {
+  font-size: 36px;
+  font-weight: 700;
+  color: #fff;
+  user-select: none;
+}
+
+.user-avatar-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+
+.user-info-section {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.user-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+}
+
+.user-info-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.user-info-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.user-logout-btn {
+  width: 100%;
+  padding: 10px 0;
+  margin-top: 8px;
+}
+
+.btn-danger {
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--danger-fg);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.btn-danger:hover {
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  border-color: var(--danger-border);
+}
+
+.settings-section-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.settings-section-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+.memory-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.settings-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 16px 0;
+}
+
+/* ---- MCP 服务 ---- */
+.mcp-server-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: var(--bg-secondary, #fafafa);
+}
+
+.mcp-server-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.mcp-server-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mcp-server-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.mcp-server-badge {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.mcp-server-badge.on {
+  background: var(--success-bg);
+  color: var(--success-fg);
+}
+
+.mcp-server-badge.off {
+  background: var(--off-bg);
+  color: var(--text-secondary);
+}
+
+.mcp-server-badge.builtin {
+  background: var(--info-bg);
+  color: var(--info-fg);
+}
+
+.mcp-server-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mcp-server-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.mcp-server-hint {
+  font-size: 12px;
+  color: var(--warning-fg);
+  margin-top: 2px;
+}
+
+/* 高级设置：控件下方的灰字说明 */
+.settings-field-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+/* ---- 模型预设 ---- */
+.preset-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: var(--bg-secondary, #fafafa);
+}
+
+.preset-item.active {
+  border-color: var(--accent, #4f46e5);
+  background: color-mix(in srgb, var(--accent, #4f46e5) 6%, transparent);
+}
+
+.preset-radio {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.preset-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.preset-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.preset-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 模型设置：选中项「默认使用」徽标 */
+.model-default-badge {
+  display: inline-block;
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: var(--success-bg);
+  color: var(--success-fg);
+  white-space: nowrap;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.preset-editor {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-secondary, #fafafa);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.preset-editor-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* ---- 表单 ---- */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  margin-bottom: 12px; /* 组间距：连续表单组不贴在一起（设置 tab 与弹窗通用） */
+}
+
+/* 弹窗 body 内最后一组：抵消 margin，避免与底部分隔/按钮区双倍间距 */
+.modal .body .form-group:last-child {
+  margin-bottom: 0;
+}
+
+.form-group label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.form-group input[type="text"],
+.form-group input[type="password"],
+.form-group input[type="number"],
+.form-group textarea,
+.form-group select {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-family: inherit;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color var(--transition);
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 44px;
+}
+
+.form-group input[type="range"] {
+  accent-color: var(--accent);
+}
+
+.form-row {
+  display: flex;
+  gap: 16px;
+}
+
+/* ---- 推理深度滑块 ---- */
+.thinking-slider-group {
+  position: relative;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  transition: background 0.5s, box-shadow 0.5s;
+  margin-top: 6px;
+  /* 注意：这里不能设 overflow:hidden —— 会让 flex 布局下 min-height 塌陷为 0，
+     区块内容（含滑杆）被压缩裁掉。火苗粒子的裁剪改由 .thinking-fire-particles 自身负责 */
+  overflow: visible;
+}
+
+.thinking-slider-group.fire-active {
+  background: linear-gradient(135deg, #1a0a00 0%, #2d1212 30%, #1a0a00 70%);
+  box-shadow: 0 0 30px rgba(255, 100, 0, 0.4), inset 0 0 30px rgba(255, 60, 0, 0.15);
+  animation: fireGlow 1.5s ease-in-out infinite alternate;
+}
+
+.thinking-slider-group.fire-active label {
+  color: #ffaa00 !important;
+}
+
+.thinking-slider-wrapper {
+  position: relative;
+  margin-top: 6px;
+}
+
+.thinking-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  padding: 0 2px;
+}
+
+.thinking-labels span {
+  transition: color 0.3s, text-shadow 0.3s;
+}
+
+.thinking-labels span.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.thinking-labels span.fire-label {
+  color: #ff6600;
+  text-shadow: 0 0 8px rgba(255, 100, 0, 0.8);
+  animation: fireTextPulse 0.8s ease-in-out infinite alternate;
+}
+
+.thinking-slider {
+  width: 100%;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: linear-gradient(to right, #4a9eff 0%, #6c5ce7 40%, #e17055 80%, #ff4400 100%);
+  border-radius: 3px;
+  outline: none;
+  transition: box-shadow 0.3s;
+}
+
+.thinking-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--accent);
+  cursor: pointer;
+  transition: box-shadow 0.3s, border-color 0.3s;
+}
+
+/* Firefox 兼容：range 的轨道与 thumb 需 -moz- 前缀，否则控件不可见 */
+.thinking-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, #4a9eff 0%, #6c5ce7 40%, #e17055 80%, #ff4400 100%);
+}
+
+.thinking-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--accent);
+  cursor: pointer;
+  transition: box-shadow 0.3s, border-color 0.3s;
+}
+
+.fire-active .thinking-slider::-webkit-slider-thumb {
+  border-color: #ff4400;
+  background: #ffdd99;
+  box-shadow: 0 0 15px rgba(255, 100, 0, 0.8), 0 0 30px rgba(255, 60, 0, 0.5), 0 0 50px rgba(255, 30, 0, 0.3);
+  animation: fireThumbPulse 0.6s ease-in-out infinite alternate;
+}
+
+.fire-active .thinking-slider {
+  box-shadow: 0 0 12px rgba(255, 100, 0, 0.5);
+}
+
+/* 火苗粒子 */
+.thinking-fire-particles {
+  position: absolute;
+  top: -30px;
+  left: 82%;
+  width: 40px;
+  height: 60px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s;
+  /* 粒子裁剪由容器自身负责（.thinking-slider-group 不能设 overflow:hidden，
+     否则 flex 压缩时会把整个区块裁掉） */
+  overflow: hidden;
+}
+
+.fire-active .thinking-fire-particles {
+  opacity: 1;
+}
+
+.fire-particle {
+  position: absolute;
+  bottom: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ff6600;
+  animation: fireRise 1s ease-out infinite;
+}
+
+.fire-particle.p1 { left: 18px; animation-delay: 0s; }
+.fire-particle.p2 { left: 10px; animation-delay: 0.15s; width: 8px; height: 8px; }
+.fire-particle.p3 { left: 25px; animation-delay: 0.3s; width: 4px; height: 4px; }
+.fire-particle.p4 { left: 14px; animation-delay: 0.5s; width: 7px; height: 7px; background: #ff9900; }
+.fire-particle.p5 { left: 22px; animation-delay: 0.65s; width: 5px; height: 5px; background: #ff3300; }
+.fire-particle.p6 { left: 8px; animation-delay: 0.8s; width: 4px; height: 4px; background: #ffcc00; }
+
+@keyframes fireGlow {
+  0% { box-shadow: 0 0 30px rgba(255, 100, 0, 0.4), inset 0 0 30px rgba(255, 60, 0, 0.15); }
+  100% { box-shadow: 0 0 50px rgba(255, 140, 0, 0.6), inset 0 0 40px rgba(255, 80, 0, 0.25); }
+}
+
+@keyframes fireThumbPulse {
+  0% { box-shadow: 0 0 15px rgba(255, 100, 0, 0.8), 0 0 30px rgba(255, 60, 0, 0.5); }
+  100% { box-shadow: 0 0 25px rgba(255, 160, 0, 1), 0 0 50px rgba(255, 80, 0, 0.7), 0 0 70px rgba(255, 30, 0, 0.4); }
+}
+
+@keyframes fireTextPulse {
+  0% { text-shadow: 0 0 8px rgba(255, 100, 0, 0.8); }
+  100% { text-shadow: 0 0 16px rgba(255, 180, 0, 1), 0 0 24px rgba(255, 100, 0, 0.6); }
+}
+
+@keyframes fireRise {
+  0% { transform: translateY(0) scale(1); opacity: 1; }
+  50% { transform: translateY(-20px) scale(1.8); opacity: 0.7; background: #ffcc00; }
+  100% { transform: translateY(-45px) scale(0.3); opacity: 0; background: #ff3300; }
+}
+
+/* ---- 当前模型行（常规 tab 思考区块顶部）---- */
+.current-model-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.current-model-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.current-model-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: right;
+  word-break: break-all;
+}
+
+/* ---- 思考开关（switch 模式）---- */
+.thinking-switch-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.thinking-switch-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.thinking-budget-value {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-left: 8px;
+}
+
+.timeout-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 0 2px;
+  margin-top: 2px;
+}
+
+.timeout-labels span {
+  width: 3em;
+  text-align: center;
+}
+
+.timeout-labels span:first-child { text-align: left; }
+.timeout-labels span:last-child { text-align: right; }
+
+.thinking-none-hint {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-style: italic;
+}
+

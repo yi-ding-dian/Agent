@@ -1,0 +1,149 @@
+/* ========================================
+   弹窗基座 + ResizableModal（overlay、8 方向拖拽手柄、右栏滚动区）
+   —— 原 index.css 第 1865-2007 行
+   ⚠️ 在 index.css 的 @import 顺序即 CSS 层叠顺序，调整顺序前先确认覆盖关系
+   ======================================== */
+
+/* ---- 弹窗 ---- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+}
+
+.modal {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  max-width: 90vw;
+  max-height: 85vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative; /* 拖拽热区（mr-edge）定位基准 */
+  animation: modal-in 0.16s ease-out; /* 弹窗淡入，减少跳变感 */
+}
+
+@keyframes modal-in {
+  from { opacity: 0; transform: scale(0.985) translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.modal-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center; /* 标题居中，关闭按钮绝对定位固定在右上角 */
+  padding: 20px 24px 0;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.modal-header .modal-close-btn {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.modal-close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 16px;
+  transition: background-color var(--transition);
+}
+
+.modal-close-btn:hover {
+  background-color: var(--bg-primary);
+}
+
+/* ─── ResizableModal 结构（移植自 svn-git/modal-shell，变量适配 MyAgent 主题） ─── */
+.modal h3 {
+  padding: 20px 24px 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.modal .body {
+  padding: 12px 20px 14px;
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal .foot {
+  padding: 12px 20px 14px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+/* 可调整大小弹窗:8 方向边缘拖拽手柄(悬停弹窗时显现,命中高亮) */
+.mr-edge {
+  position: absolute;
+  z-index: 6;
+  border-radius: 3px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.modal:hover .mr-edge { opacity: 0.35; }
+.modal:hover .mr-edge:hover,
+.modal:hover .mr-edge.active { opacity: 0.7; }
+
+/* 右栏内容区（原 .modal-body 的滚动/间距样式，仅设置弹窗使用） */
+.settings-content {
+  flex: 1;
+  min-width: 0;
+  min-height: 0; /* flex 滚动保险：内容超出时可滚动 */
+  padding: 12px 20px 14px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 关键修复：禁止 flex 均分/压缩设置内容区块。
+   此前 .form-group 全局定义 flex:1（flex-basis:0%），settings-content 高度不足时
+   flex-shrink 会把区块压扁；其中 .thinking-slider-group 因 overflow:hidden 使
+   min-height 塌陷为 0，成为唯一可被压扁的区块 —— 推理深度滑杆及其 labels 被
+   裁出可视区，且内容被压缩后无溢出、settings-content 无滚动空间，用户既看不到
+   也拖不到滑杆（Firefox/Chromium 均复现）。改为按内容高度排布后，滑杆所在区块
+   固定在顶部任何视口均可见，内容超高时由 settings-content 正常滚动。 */
+.settings-content > .form-group,
+.settings-content > .form-row {
+  flex: none;
+}
+
+/* 滚动条明显化（矮视口下让用户知道可滚动） */
+.settings-content::-webkit-scrollbar {
+  width: 8px;
+}
+.settings-content::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text-muted) 40%, transparent);
+  border-radius: 4px;
+}
+.settings-content::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--text-muted) 60%, transparent);
+}
+.settings-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
