@@ -173,7 +173,9 @@ async function main() {
       session!.events.removeListener('sse', onSse);
       session!.events.removeListener('done', onDone);
       mgr.persistSession(finalSessionId);
-      wsServer.sendToConnection(socket.ws, { type: 'done' });
+      // 带上会话归属：前端据此把「该会话跑完了」应用到正确的会话上
+      // （多会话并行时，不带的话前端无从判断是哪一条结束）
+      wsServer.sendToConnection(socket.ws, { type: 'done', sessionId: finalSessionId });
     };
 
     session.events.on('sse', onSse);
@@ -189,7 +191,7 @@ async function main() {
     // 执行（经 input 钩子转换后的文本）
     session.processMessage(effectiveMessage, images as any).catch((err: unknown) => {
       console.error('[WS chat_message] processMessage error:', err);
-      wsServer.sendToConnection(socket.ws, { type: 'error', message: err instanceof Error ? err.message : String(err) });
+      wsServer.sendToConnection(socket.ws, { type: 'error', message: err instanceof Error ? err.message : String(err), sessionId: finalSessionId });
     });
   });
 

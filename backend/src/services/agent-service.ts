@@ -72,6 +72,8 @@ export class AgentSessionService {
   private systemPrompt: string;
   private agent: Agent;
   private destroyed = false;
+  /** 是否正在执行一轮对话（processMessage 期间为 true） */
+  private running = false;
 
   /** 模型预设级思考模式（undefined = 跟随全局 thinking_level；applyModelOverrides 重建时用于比较） */
   readonly thinkingLevel?: string;
@@ -95,9 +97,12 @@ export class AgentSessionService {
     this.thinkingLevel = thinkingLevel;
     console.log(`[AgentSession] Creating session ${sessionId} mode=${mode} thinkingLevel=${thinkingLevel ?? '(跟随全局)'} initialMsgs=${initialMessages?.length ?? 0}`);
 
+    // 所有下行事件统一带上会话归属：前端据此把增量路由到对应会话。
+    // 不带的后果：切换会话后，A 的增量既可能被写进当前显示的 B（串台），
+    // 也可能在切回 A 时因找不到 isStreaming 消息而被静默丢弃（界面"冻死"）。
     const emitEvent = (event: ClientEvent) => {
       if (!this.destroyed) {
-        this.events.emit('sse', event);
+        this.events.emit('sse', { ...event, sessionId: this.sessionId });
       }
     };
 
@@ -176,7 +181,8 @@ export class AgentSessionService {
           const events = Array.isArray(clientEvents) ? clientEvents : [clientEvents];
           for (const evt of events) {
             if (!this.destroyed) {
-              this.events.emit('sse', evt);
+              // 同 emitEvent：统一附加会话归属，供前端多会话路由
+              this.events.emit('sse', { ...evt, sessionId: this.sessionId });
             }
           }
         }
@@ -249,6 +255,9 @@ export class AgentSessionService {
 
     const effectiveMessage = inPlan ? `${PLAN_PREFIX}\n\n${message}` : message;
     console.log(`[AgentSession] processMessage session=${this.sessionId} plan=${inPlan} message="${effectiveMessage.slice(0, 100)}"${imgInfo}`);
+    // 执行中标志：供前端在刷新/重连后恢复「哪些会话还在跑」——
+    // 前端 runningSessions 是内存态，页面一刷新就丢，只能靠这里查回来
+    this.running = true;
     try {
       await this.agent.prompt(effectiveMessage, images);
       console.log(`[AgentSession] processMessage completed for ${this.sessionId}`);
@@ -256,10 +265,17 @@ export class AgentSessionService {
       console.error(`[AgentSession] processMessage error for ${this.sessionId}:`, error);
       if (!this.destroyed) {
         const errMsg = error instanceof Error ? error.message : String(error);
-        this.events.emit('sse', { type: 'error', message: errMsg });
+        this.events.emit('sse', { type: 'error', message: errMsg, sessionId: this.sessionId });
         this.events.emit('done');
       }
+    } finally {
+      this.running = false;
     }
+  }
+
+  /** 该会话是否正在执行一轮对话（供前端恢复「执行中」标识） */
+  isRunning(): boolean {
+    return this.running;
   }
 
   /**
@@ -274,7 +290,7 @@ export class AgentSessionService {
       timestamp: Date.now(),
     } as any);
     // 通知前端消息已入队
-    this.events.emit('sse', { type: 'message_queued', message });
+    this.events.emit('sse', { type: 'message_queued', message, sessionId: this.sessionId });
   }
 
   /**
@@ -294,7 +310,7 @@ export class AgentSessionService {
   abort(): void {
     console.log(`[AgentSession] abort session=${this.sessionId}`);
     this.agent.abort();
-    this.events.emit('sse', { type: 'aborted' });
+    this.events.emit('sse', { type: 'aborted', sessionId: this.sessionId });
     this.events.emit('done');
   }
 

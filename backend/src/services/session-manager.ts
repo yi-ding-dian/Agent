@@ -478,6 +478,22 @@ export class SessionManager {
     return Array.from(this.sessions.keys());
   }
 
+  /**
+   * 列出正在执行一轮对话的会话 ID（可选按归属用户过滤）。
+   *
+   * 前端 runningSessions 是内存态，刷新页面/HMR 后会丢失，届时靠这里查回来，
+   * 否则后端还在跑、界面上却没有任何「执行中」标识。
+   */
+  listRunningSessionIds(userId?: number): string[] {
+    const ids: string[] = [];
+    for (const [id, entry] of this.sessions) {
+      if (!entry.service.isRunning()) continue;
+      if (userId !== undefined && entry.userId !== userId) continue;
+      ids.push(id);
+    }
+    return ids;
+  }
+
   cleanupStale(maxAgeMs = 30 * 60 * 1000): void {
     const now = Date.now();
     for (const [id, entry] of this.sessions) {

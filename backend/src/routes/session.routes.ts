@@ -19,8 +19,12 @@ sessionRouter.get('/sessions', (req: Request, res: Response): void => {
   const memSessions = mgr.listSessions(userId);
   const dbSessions = mgr.loadUserSessions(userId);
 
+  // 正在执行对话的会话：前端的 runningSessions 是内存态，刷新页面/HMR 后会丢，
+  // 只能从这里查回来，否则后端还在跑、界面上却没有任何「执行中」标识
+  const runningIds = new Set(mgr.listRunningSessionIds(userId));
+
   // 以数据库记录为主，内存中的覆盖
-  const sessionMap = new Map<string, { id: string; name: string; mode: string; createdAt: string; lastActiveAt: string }>();
+  const sessionMap = new Map<string, { id: string; name: string; mode: string; createdAt: string; lastActiveAt: string; running: boolean }>();
   for (const s of dbSessions) {
     sessionMap.set(s.id, {
       id: s.id,
@@ -28,6 +32,7 @@ sessionRouter.get('/sessions', (req: Request, res: Response): void => {
       mode: s.mode,
       createdAt: s.createdAt,
       lastActiveAt: s.lastActiveAt,
+      running: runningIds.has(s.id),
     });
   }
   for (const s of memSessions) {
@@ -37,6 +42,7 @@ sessionRouter.get('/sessions', (req: Request, res: Response): void => {
       mode: s.mode,
       createdAt: (s as any).createdAt instanceof Date ? (s as any).createdAt.toISOString() : String((s as any).createdAt),
       lastActiveAt: (s as any).lastActiveAt instanceof Date ? (s as any).lastActiveAt.toISOString() : String((s as any).lastActiveAt),
+      running: runningIds.has(s.id),
     });
   }
 
