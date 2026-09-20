@@ -32,6 +32,8 @@ import { createSubagentTool } from './subagent.tool.js';
 export interface CreateCustomToolsOptions {
   /** subagent 子代理使用的模型（默认与主代理一致），不传时保持原有默认行为（agent 默认模型配置） */
   model?: Model<any>;
+  /** 所属会话 id：透传给 subagent 工具，用于「停止该会话下全部子代理」 */
+  sessionId?: string;
 }
 
 /**
@@ -79,7 +81,7 @@ export function createCustomTools(
     createRunPythonTool(workDir),
     createRunSkillTool(),
     createRememberTool(),
-    createSubagentTool(workDir, { model: opts?.model }),
+    createSubagentTool(workDir, { model: opts?.model, sessionId: opts?.sessionId }),
   ];
   // 工具按会话实例化，每次返回全新对象，原地补 required 无跨会话污染
   for (const t of tools) ensureRequiredKey(t.parameters);

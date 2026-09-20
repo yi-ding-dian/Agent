@@ -70,6 +70,8 @@ export interface SubagentDetails {
   truncated?: boolean;
   /** 是否因整体超时中止 */
   timedOut?: boolean;
+  /** 是否被用户主动停止（与 timedOut / 轮数上限区分，前端据此显示「已中止」而非「失败」） */
+  aborted?: boolean;
   /** 子代理执行是否出错（错误不吞掉） */
   isError?: boolean;
   /** 错误信息（isError 时存在） */
@@ -230,6 +232,37 @@ function extractAssistantText(messages: AgentMessage[]): string {
   return '';
 }
 
+// ─── 运行中子代理注册表（供「随时停止子 Agent」）─────────────
+
+/**
+ * agentId（= 外层 subagent 工具的 toolCallId）→ 运行句柄。
+ *
+ * 子代理是独立 agent 循环，已有 maxTurns（默认 8）与整体超时（默认 120s）两道硬闸，
+ * 但用户仍需即时中止能力：发现方向跑偏时不必干等兜底触发。置于模块级 Map，
+ * 便于按 agentId 单停、或按 sessionId 批量停。
+ */
+const runningSubAgents = new Map<string, { sessionId: string; abort: () => void }>();
+
+/** 停止指定子代理（agentId = subagent 工具调用的 toolCallId）；未在运行返回 false */
+export function abortSubAgent(agentId: string): boolean {
+  const entry = runningSubAgents.get(agentId);
+  if (!entry) return false;
+  entry.abort();
+  return true;
+}
+
+/** 停止某会话下所有运行中的子代理，返回实际停止数量 */
+export function abortSessionSubAgents(sessionId: string): number {
+  let stopped = 0;
+  for (const entry of runningSubAgents.values()) {
+    if (entry.sessionId === sessionId) {
+      entry.abort();
+      stopped++;
+    }
+  }
+  return stopped;
+}
+
 // ─── 工具工厂 ─────────────────────────────────────────────────
 
 export interface CreateSubagentToolOptions {
@@ -241,6 +274,8 @@ export interface CreateSubagentToolOptions {
   maxTurns?: number;
   /** 整体超时毫秒数（默认 120000） */
   timeoutMs?: number;
+  /** 所属会话 id：用于「停止该会话下全部子代理」。不传则该子代理只支持按 agentId 单停 */
+  sessionId?: string;
 }
 
 export function createSubagentTool(
@@ -430,12 +465,20 @@ export function createSubagentTool(
 
         // ⑤ 整体超时 + 主代理 abort 链（用户中止主代理时子代理同步中止）
         let timedOut = false;
+        // 用户主动停止标记：经注册表 abort 时置位，用于与超时/轮数上限区分（前端显示「已中止」）
+        let abortedByUser = false;
         const timeoutId = setTimeout(() => {
           timedOut = true;
           subAgent.abort();
         }, timeoutMs);
         const onOuterAbort = () => subAgent.abort();
         signal?.addEventListener('abort', onOuterAbort, { once: true });
+
+        // 注册到运行表：支持按 agentId 或按会话即时停止（finally 中注销）
+        runningSubAgents.set(toolCallId, {
+          sessionId: options.sessionId ?? '',
+          abort: () => { abortedByUser = true; subAgent.abort(); },
+        });
 
         try {
           await subAgent.prompt({
@@ -458,6 +501,7 @@ export function createSubagentTool(
             },
           };
         } finally {
+          runningSubAgents.delete(toolCallId);
           clearTimeout(timeoutId);
           signal?.removeEventListener('abort', onOuterAbort);
           // 收尾：清掉节流定时器并推送残留增量（文本 + 思考）
@@ -479,9 +523,12 @@ export function createSubagentTool(
         const isError = Boolean(errorMsg) || timedOut;
         const summary =
           extractAssistantText(subAgent.state.messages) || errorMsg || '(子代理未产生输出)';
-        const text = isError
-          ? `[子代理出错${timedOut ? '（整体超时）' : ''}] ${errorMsg ?? ''}\n${summary}`
-          : summary;
+        // 用户主动停止不算执行失败（属预期操作），但文本须明确告知主代理，避免其误以为任务已完成
+        const text = abortedByUser
+          ? `[子代理已被用户中止] ${summary}`
+          : isError
+            ? `[子代理出错${timedOut ? '（整体超时）' : ''}] ${errorMsg ?? ''}\n${summary}`
+            : summary;
 
         return {
           content: [{ type: 'text', text }],
@@ -491,6 +538,7 @@ export function createSubagentTool(
             turns,
             truncated,
             timedOut,
+            aborted: abortedByUser,
             isError,
             error: errorMsg ?? undefined,
           },

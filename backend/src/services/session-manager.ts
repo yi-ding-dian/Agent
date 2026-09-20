@@ -117,7 +117,8 @@ export class SessionManager {
     }
 
     // 基础工具 + 扩展注册工具 + MCP 工具（createSession 与 applyModelOverrides 重建共用）
-    tools = this.buildTools(mode, model);
+    // sessionId 透传给 subagent 工具，供「停止该会话下全部子代理」按会话定位
+    tools = this.buildTools(mode, model, id);
 
     const sessionName = name || `对话 ${this.sessions.size + 1}`;
     console.log(`[SessionManager] Creating session id=${id} userId=${userId} mode=${mode} name=${sessionName}`);
@@ -158,10 +159,10 @@ export class SessionManager {
    * 构建会话工具集：模式基础工具 + 扩展注册工具 + MCP 工具。
    * createSession 与 applyModelOverrides 重建共用，保证重建后工具面与新建一致。
    */
-  private buildTools(mode: AgentRunMode, model: Model<any>): AgentTool<any>[] {
+  private buildTools(mode: AgentRunMode, model: Model<any>, sessionId?: string): AgentTool<any>[] {
     let tools: AgentTool<any>[] =
       mode === 'agent'
-        ? createAgentTools(config.workDir, { model })
+        ? createAgentTools(config.workDir, { model, sessionId })
         : createChatTools();
 
     // 合并扩展注册的工具
@@ -259,7 +260,7 @@ export class SessionManager {
       entry.systemPrompt,
       entry.metadata.mode,
       model,
-      this.buildTools(entry.metadata.mode, model),
+      this.buildTools(entry.metadata.mode, model, sessionId),
       undefined,
       targetThinkingLevel,
     );
