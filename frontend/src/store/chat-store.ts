@@ -27,6 +27,15 @@ interface ChatStore {
   flyRequest: { id: string; task: string; ts: number } | null;
   clearFly: () => void;
   isProcessing: boolean;
+  /**
+   * 正在执行的会话 id 列表（不止当前显示的那个）。
+   *
+   * 用户在 A 执行中切到 B 时，A 后端仍在跑 —— 侧栏据此给这些会话显示动态边框，
+   * 让用户知道"哪个会话还在干活"，而不是切走后就无从感知。
+   */
+  runningSessions: string[];
+  /** 标记某会话开始/结束执行（去重；结束用 done/error/aborted 驱动） */
+  setSessionRunning: (id: string, running: boolean) => void;
   mode: AgentMode;
   /** 规划模式开关（web/SSE；只读调研，plan 轮完成后展示计划卡片） */
   planMode: boolean;
@@ -76,7 +85,13 @@ interface ChatStore {
   compactSession: (sessionId: string) => Promise<any>;
   /** 断线恢复：轮询拉取会话完整消息直至稳定（SSE 流中断后） */
   recoverSessionAfterInterrupt: (sessionId: string) => Promise<void>;
-  sendMessage: (text: string, images?: { type: string; data: string; mimeType: string }[]) => Promise<void>;
+  /**
+   * 发送消息。
+   *
+   * `opts.force`：跳过「本轮仍在处理」的并发守卫。仅 processQueue 出队时使用 ——
+   * 那一刻上一轮刚结束，队列里的（带图）消息需要真正发出去，不能再被挡回队列。
+   */
+  sendMessage: (text: string, images?: { type: string; data: string; mimeType: string }[], opts?: { force?: boolean }) => Promise<void>;
   stopGeneration: () => void;
   /** 停止指定子代理（agentId = AgentInfo.id = subagent 工具调用的 toolCallId） */
   stopSubAgent: (agentId: string) => Promise<void>;
@@ -169,6 +184,102 @@ function extractTextContent(content: any): string {
  */
 function stripTaskPrefix(text: string): string {
   return text.replace(/^\s*任务\s*[:：]\s*/, '');
+}
+
+/**
+ * 后台会话的实时视图。
+ *
+ * 场景：A 正在流式输出，用户切到 B —— A 在后端照跑，事件持续到达前端。
+ * 此前前端只有一份 messages：切走时被 B 的快照整体覆盖，A 的增量随即被
+ * `if (last.isStreaming)` 挡掉而静默丢弃；切回 A 时后端又尚未落库正在生成的那条，
+ * 于是界面「冻」在切换那一刻，看着像会话死了。
+ *
+ * 这里为仍在后台执行的会话保留内存视图：事件按 sessionId 累积进来，切回时优先
+ * 用它恢复（含 isStreaming 标记）；该会话流结束后丢弃存档，回落到后端落库结果。
+ */
+interface LiveView {
+  messages: ChatMessage[];
+  agents: AgentInfo[];
+}
+
+const liveViews = new Map<string, LiveView>();
+
+/**
+ * 把「对消息数组的更新」路由到事件所属的会话。
+ *
+ * - 属于当前显示的会话 → 写 store
+ * - 属于其他会话、且它正在后台跑（liveViews 有存档）→ 累积进存档
+ * - 其余 → 丢弃并返回 false（防止把 A 的增量画到 B 上）
+ *
+ * 事件不带 sessionId 时按当前会话处理（向后兼容旧事件）。
+ */
+function withMessages(sid: unknown, fn: (msgs: ChatMessage[]) => ChatMessage[]): boolean {
+  const { activeSessionId } = useChatStore.getState();
+  const id = typeof sid === 'string' ? sid : null;
+  if (id && activeSessionId && id !== activeSessionId) {
+    const view = liveViews.get(id);
+    if (!view) return false;
+    view.messages = fn(view.messages);
+    return true;
+  }
+  useChatStore.setState((s) => ({ messages: fn(s.messages) }));
+  return true;
+}
+
+/** 子代理列表与 withMessages 同构：同样按会话归属路由 */
+function withAgents(sid: unknown, fn: (agents: AgentInfo[]) => AgentInfo[]): boolean {
+  const { activeSessionId } = useChatStore.getState();
+  const id = typeof sid === 'string' ? sid : null;
+  if (id && activeSessionId && id !== activeSessionId) {
+    const view = liveViews.get(id);
+    if (!view) return false;
+    view.agents = fn(view.agents);
+    return true;
+  }
+  useChatStore.setState((s) => ({ agents: fn(s.agents) }));
+  return true;
+}
+
+/** 事件是否属于当前正在显示的会话（用于只对当前会话生效的附属状态，如 totalUsage/error） */
+function isActiveSession(sid: unknown): boolean {
+  const id = typeof sid === 'string' ? sid : null;
+  const { activeSessionId } = useChatStore.getState();
+  return !id || !activeSessionId || id === activeSessionId;
+}
+
+/**
+ * 该会话本轮结束：丢弃后台存档，切回时改走「后端落库结果」。
+ *
+ * 存档只服务于「执行中切走再切回」的连续性；一旦收尾，后端已写入完整消息，
+ * 再用存档反而可能停留在半截状态。当前显示的会话本就没有存档，调用无副作用。
+ */
+function endLiveView(sid: unknown): void {
+  const id = typeof sid === 'string' ? sid : null;
+  if (id) liveViews.delete(id);
+}
+
+// ─── 「执行中」状态的轮询兜底 ──────────────────────────
+
+let runningSyncTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * 有会话处于执行中时，定期回后端核对状态。
+ *
+ * 为什么需要：实时事件是绑定在「发起那次请求」的 WS 连接上的（后端见 onSse/onDone），
+ * 页面刷新或断线重连后前端是全新连接、旧连接的监听已随 close 移除 —— 后端正在跑的
+ * 会话不会再推任何事件过来。此时若不核对，侧栏「执行中」边框会一直亮着不熄灭，
+ * 与真实状态脱节。后端 listRunningSessionIds 才是权威，故以它为准。
+ *
+ * 只在确有执行中的会话时启用（间隔 3s），全部结束后自动停止。
+ */
+function startRunningSync(): void {
+  if (runningSyncTimer) return;
+  runningSyncTimer = setTimeout(async () => {
+    runningSyncTimer = null;
+    if (useChatStore.getState().runningSessions.length === 0) return;
+    await useChatStore.getState().loadSessions();
+    if (useChatStore.getState().runningSessions.length > 0) startRunningSync();
+  }, 3000);
 }
 
 function rebuildAgentsFromMessages(messages: ChatMessage[]): AgentInfo[] {
@@ -327,6 +438,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   agents: [],
   flyRequest: null,
   isProcessing: false,
+  runningSessions: [],
   mode: 'agent',
   planMode: false,
   planReady: null,
@@ -429,7 +541,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   loadSessions: async () => {
     try {
       const data = await api.listSessions();
-      set({ sessions: data.sessions || [] });
+      const sessions: SessionInfo[] = data.sessions || [];
+      // 顺带同步「执行中」集合：runningSessions 是内存态，刷新页面 / HMR 热重载后
+      // 会整个丢失 —— 那时后端仍在跑，界面上却毫无标识。后端才是权威状态，故以它为准。
+      // （loadSessions 只在初始化与 Electron/SSE 降级路径调用，不在 WS 高频路径上，
+      //  不会与「消息刚发出、后端尚未开始执行」的瞬间竞争。）
+      const serverRunning = sessions.filter((s) => s.running).map((s) => s.id);
+      set({ sessions, runningSessions: serverRunning });
+      if (serverRunning.length > 0) startRunningSync();
     } catch { /* ignore */ }
   },
   createNewSession: async () => {
@@ -447,6 +566,31 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
   },
   switchSession: async (id) => {
+    const { activeSessionId: prevId, messages: prevMessages, agents: prevAgents } = get();
+
+    // 切走时留存：原会话若仍在执行，把它的消息/子代理视图存进 liveViews ——
+    // 这样它后续到达的增量有处可去（见 withMessages），切回时也能原样恢复。
+    if (prevId && prevId !== id && get().isProcessing) {
+      liveViews.set(prevId, { messages: prevMessages, agents: prevAgents });
+    }
+
+    // 切回一个仍在后台执行的会话：直接用内存视图恢复。
+    // 此刻后端尚未落库正在生成的那条消息，若走快照，界面会停在切换那一刻不再更新。
+    const live = liveViews.get(id);
+    if (live) {
+      liveViews.delete(id);
+      set({
+        activeSessionId: id,
+        messages: live.messages,
+        agents: live.agents,
+        isProcessing: true,
+        scrolledAway: false,
+        flyRequest: null,
+        needsRebuild: false,
+      });
+      return;
+    }
+
     try {
       const data = await api.getSession(id);
       set({
@@ -458,8 +602,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         scrolledAway: false,
         agents: rebuildAgentsFromMessages(apiMessagesToChatMessages(data.messages || [])),
         flyRequest: null,
+        // 切到并未在执行的会话：清掉处理中状态 —— 原先不重置，会让「停止」按钮
+        // 跟着上一个会话的状态泄漏过来
+        isProcessing: false,
       });
-    } catch { set({ activeSessionId: id, messages: [], agents: [], flyRequest: null, totalUsage: { input: 0, output: 0, total: 0 }, scrolledAway: false, needsRebuild: true }); }
+    } catch { set({ activeSessionId: id, messages: [], agents: [], flyRequest: null, totalUsage: { input: 0, output: 0, total: 0 }, scrolledAway: false, needsRebuild: true, isProcessing: false }); }
   },
   renameSession: async (id, name) => {
     try {
@@ -474,12 +621,17 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
       // 先停后删：会话若仍在跑，删除后 SSE 事件会继续回流 —— tool_start 是「追加」语义
       // （agents: [...s.agents, newAgent]），会把刚清空的子 Agent 列表重新填回来，消息同理。
-      // 两个 abort 接口均幂等（没在跑时后端返回 stopped=false），故用 allSettled 容错。
-      if (isElectron()) window.myagent!.chatAbort(id).catch(() => {});
-      await Promise.allSettled([api.abortAllSubAgents(id), api.abortSession(id)]);
-      if (isActive) {
-        if (abortController) { abortController.abort(); abortController = null; }
-        getWSClient().send({ type: 'abort', sessionId: id });
+      // 只对确有执行中任务的会话发中止请求：不在后端内存里的历史会话（内存有 30 分钟清理）
+      // 调 abort 一律 404，纯属噪音（allSettled 虽能吞掉异常，但浏览器网络面板照样记 404）。
+      // 子代理运行必然伴随主代理运行，故以 runningSessions 判定即可覆盖。
+      const isRunning = get().runningSessions.includes(id);
+      if (isRunning) {
+        if (isElectron()) window.myagent!.chatAbort(id).catch(() => {});
+        await Promise.allSettled([api.abortAllSubAgents(id), api.abortSession(id)]);
+        if (isActive) {
+          if (abortController) { abortController.abort(); abortController = null; }
+          getWSClient().send({ type: 'abort', sessionId: id });
+        }
       }
 
       await api.deleteSession(id);
@@ -637,7 +789,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       // 有图片：走 rebuild + sendMessage，确保图片能发送
       const [next, ...rest] = messageQueue;
       set({ messageQueue: rest, steerQueueCount: 0, needsRebuild: true });
-      get().sendMessage(next.text, next.images);
+      // force：此刻上一轮刚结束（done/agent_end 里已置 isProcessing=false），
+      // 出队的消息必须真正发出，不能再被并发守卫挡回队列
+      get().sendMessage(next.text, next.images, { force: true });
     } else {
       // 纯文本已通过 steer 处理，清理队列
       set({ messageQueue: [], steerQueueCount: 0 });
@@ -660,7 +814,23 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   // ─── 发送消息 ────────────────────────
 
-  sendMessage: async (text, images) => {
+  sendMessage: async (text, images, opts) => {
+    /**
+     * 并发守卫：本轮尚未结束时不再并行发起第二次 processMessage。
+     *
+     * 后端每收到一次 chat_message 都会 `session.events.on('sse', onSse)` 注册转发监听，
+     * 同一会话并发会让 message_delta 发两遍、前端内容重复累积（如"你好你好"）。
+     * 运行中追加消息的正道是 queueMessage —— 纯文本走 steer 注入当前上下文、
+     * 带图则入队等待本轮结束（见 processQueue）。
+     *
+     * 原先这条纪律只靠 InputBar 的 UI 状态维持（输入框切到"排队"模式），
+     * 任何绕过 UI 的新入口都可能破坏它，故在此兜底。
+     */
+    if (get().isProcessing && !opts?.force) {
+      get().queueMessage(text, images);
+      return;
+    }
+
     const { activeSessionId, mode, wsStatus } = get();
 
     const userMsg: ChatMessage = {
@@ -669,6 +839,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     };
 
     set((s) => ({ messages: [...s.messages, userMsg], isProcessing: true, error: null }));
+    // 会话开始执行：侧栏给它显示动态边框（切走后也一直亮着，直到 done/error/aborted）
+    if (activeSessionId) get().setSessionRunning(activeSessionId, true);
 
     // Electron 模式：发送到主进程 Agent 引擎（事件通过 onAgentEvent 推送）
     if (isElectron()) {
@@ -827,6 +999,17 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   setScrolledAway: (away) => set({ scrolledAway: away }),
   scrollToBottom: () => set((s) => ({ scrollToBottomTrigger: s.scrollToBottomTrigger + 1 })),
 
+  /** 标记某会话开始/结束执行（幂等；结束由 done/error/aborted 驱动） */
+  setSessionRunning: (id, running) => {
+    set((s) => ({
+      runningSessions: running
+        ? (s.runningSessions.includes(id) ? s.runningSessions : [...s.runningSessions, id])
+        : s.runningSessions.filter((x) => x !== id),
+    }));
+    // 开始执行：启用轮询兜底，以防这条连接收不到后续的 done（刷新/重连后的常见情形）
+    if (running) startRunningSync();
+  },
+
   // ─── 事件处理（SSE 和 WS 共用） ──────
 
   handleWSEvent: (event) => get().handleSSEEvent(event),
@@ -849,28 +1032,26 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       }
 
       case 'agent_start': {
-        set((s) => ({
-          messages: [...s.messages, {
-            id: nextId(), role: 'assistant', content: '', thinking: '',
-            timestamp: Date.now(), isStreaming: true,
-          }],
-        }));
+        withMessages(event.sessionId, (msgs) => [...msgs, {
+          id: nextId(), role: 'assistant', content: '', thinking: '',
+          timestamp: Date.now(), isStreaming: true,
+        }]);
         break;
       }
 
       case 'message_delta': {
-        set((s) => {
-          const msgs = [...s.messages];
-          const last = msgs[msgs.length - 1];
+        withMessages(event.sessionId, (msgs) => {
+          const next = [...msgs];
+          const last = next[next.length - 1];
           if (last && last.isStreaming) {
             const delta = event.delta as string;
             if (event.thinking) {
-              msgs[msgs.length - 1] = { ...last, thinking: (last.thinking || '') + delta };
+              next[next.length - 1] = { ...last, thinking: (last.thinking || '') + delta };
             } else {
-              msgs[msgs.length - 1] = { ...last, content: last.content + delta };
+              next[next.length - 1] = { ...last, content: last.content + delta };
             }
           }
-          return { messages: msgs };
+          return next;
         });
         break;
       }
@@ -879,9 +1060,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         const u = (event as any).usage;
         const errMsg = (event as any).errorMessage as string | undefined;
         if ((u && typeof u.input === 'number') || errMsg) {
-          set((s) => {
-            const msgs = [...s.messages];
-            const last = msgs[msgs.length - 1];
+          withMessages(event.sessionId, (msgs) => {
+            const next = [...msgs];
+            const last = next[next.length - 1];
             if (last && last.role === 'assistant') {
               const updated: ChatMessage = { ...last };
               if (u && typeof u.input === 'number') {
@@ -897,19 +1078,20 @@ export const useChatStore = create<ChatStore>((set, get) => ({
               }
               // LLM 调用失败：挂上可读原因，消息内展示错误提示块（绝不空白）
               if (errMsg) updated.errorMessage = errMsg;
-              msgs[msgs.length - 1] = updated;
+              next[next.length - 1] = updated;
             }
-            return {
-              messages: msgs,
-              totalUsage: u && typeof u.input === 'number'
-                ? {
-                    input: s.totalUsage.input + u.input,
-                    output: s.totalUsage.output + (u.output || 0),
-                    total: s.totalUsage.total + (u.totalTokens || 0),
-                  }
-                : s.totalUsage,
-            };
+            return next;
           });
+          // totalUsage 是当前会话的展示指标，只对当前会话累积（后台会话切回时会重新拉取）
+          if (u && typeof u.input === 'number' && isActiveSession(event.sessionId)) {
+            set((s) => ({
+              totalUsage: {
+                input: s.totalUsage.input + u.input,
+                output: s.totalUsage.output + (u.output || 0),
+                total: s.totalUsage.total + (u.totalTokens || 0),
+              },
+            }));
+          }
         }
         break;
       }
@@ -922,77 +1104,77 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           status: 'running',
           startTime: Date.now(),
         };
-        set((s) => {
-          const msgs = [...s.messages];
-          const lastIdx = msgs.length - 1;
+        withMessages(event.sessionId, (msgs) => {
+          const next = [...msgs];
+          const lastIdx = next.length - 1;
           if (lastIdx >= 0) {
-            const last = { ...msgs[lastIdx] };
+            const last = { ...next[lastIdx] };
             last.toolCalls = [...(last.toolCalls || []), tc];
-            msgs[lastIdx] = last;
+            next[lastIdx] = last;
           }
-          return { messages: msgs };
+          return next;
         });
-        // 干活的 Agent：subagent 工具开始执行 → 创建列表项（会话级，切会话清空）+ 触发魔法飞行动画
+        // 干活的 Agent：subagent 工具开始执行 → 创建列表项（会话级，切会话清空）
         if (event.toolName === 'subagent') {
           const rawTask = (event.args as any)?.task;
           const task = stripTaskPrefix(
             typeof rawTask === 'string' ? rawTask : JSON.stringify(rawTask ?? ''),
           );
           const toolCallId = event.toolCallId as string;
-          set((s) => ({
-            agents: [
-              ...s.agents,
-              {
-                id: toolCallId,
-                task,
-                status: 'running',
-                startedAt: Date.now(),
-                events: [],
-              },
-            ],
-            // 动画触发：新调用覆盖旧请求（MagicFly 监听 id 变化）
-            flyRequest: { id: toolCallId, task, ts: Date.now() },
-          }));
+          withAgents(event.sessionId, (agents) => [
+            ...agents,
+            {
+              id: toolCallId,
+              task,
+              status: 'running',
+              startedAt: Date.now(),
+              events: [],
+            },
+          ]);
+          // 动画只对当前显示的会话触发：新调用覆盖旧请求（MagicFly 监听 id 变化）
+          if (isActiveSession(event.sessionId)) {
+            set({ flyRequest: { id: toolCallId, task, ts: Date.now() } });
+          }
         }
         break;
       }
 
       case 'tool_update': {
         // 流式输出更新（仅更新状态，不累积输出内容）
-        set((s) => {
-          const msgs = [...s.messages];
-          const lastIdx = msgs.length - 1;
+        withMessages(event.sessionId, (msgs) => {
+          const next = [...msgs];
+          const lastIdx = next.length - 1;
           if (lastIdx >= 0) {
-            const last = { ...msgs[lastIdx] };
+            const last = { ...next[lastIdx] };
             last.toolCalls = (last.toolCalls || []).map((t) =>
               t.id === event.toolCallId
                 ? { ...t, status: 'streaming' as const }
                 : t
             );
-            msgs[lastIdx] = last;
+            next[lastIdx] = last;
           }
-          return { messages: msgs };
+          return next;
         });
         // 干活的 Agent：subagent 工具实时推送子代理内部事件（tool_update.partialResult.details.subagentEvent）
         const subEvt = (event as any).partialResult?.details?.subagentEvent as SubagentEvent | undefined;
         if (subEvt) {
-          set((s) => ({
-            agents: s.agents.map((a) =>
+          withAgents(event.sessionId, (agents) =>
+            agents.map((a) =>
               a.id === event.toolCallId
                 ? { ...a, events: [...a.events, subEvt] }
                 : a
-            ),
-          }));
+            )
+          );
         }
         break;
       }
 
       case 'tool_end': {
-        set((s) => {
-          const msgs = [...s.messages];
-          const lastIdx = msgs.length - 1;
+        withMessages(event.sessionId, (msgs) => {
+          const next = [...msgs];
+          const lastIdx = next.length - 1;
           if (lastIdx >= 0) {
-            const last = { ...msgs[lastIdx] };
+            const last = { ...next[lastIdx] };
             last.toolCalls = (last.toolCalls || []).map((t) =>
               t.id === event.toolCallId
                 ? {
@@ -1004,15 +1186,15 @@ export const useChatStore = create<ChatStore>((set, get) => ({
                   }
                 : t
             );
-            msgs[lastIdx] = last;
+            next[lastIdx] = last;
           }
-          return { messages: msgs };
+          return next;
         });
         // 干活的 Agent：subagent 工具结束 → 状态完成/失败/已中止 + 结束时间 + 最终摘要
         if (event.toolName === 'subagent') {
           const resultDetails = (event.result as any)?.details;
-          set((s) => ({
-            agents: s.agents.map((a) =>
+          withAgents(event.sessionId, (agents) =>
+            agents.map((a) =>
               a.id === event.toolCallId
                 ? {
                     ...a,
@@ -1029,8 +1211,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
                         : a.summary,
                   }
                 : a
-            ),
-          }));
+            )
+          );
         }
         break;
       }
@@ -1051,59 +1233,73 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             }
           }
         }
-        set((s) => {
-          const msgs = [...s.messages];
-          const last = msgs[msgs.length - 1];
+        withMessages(event.sessionId, (msgs) => {
+          const next = [...msgs];
+          const last = next[next.length - 1];
           if (last && last.isStreaming) {
             const elapsed = Math.round((Date.now() - last.timestamp) / 1000);
             const updated: ChatMessage = { ...last, isStreaming: false, duration: elapsed };
             if (errMsg && !updated.errorMessage) updated.errorMessage = errMsg;
-            msgs[msgs.length - 1] = updated;
+            next[next.length - 1] = updated;
           }
-          return { messages: msgs, isProcessing: false };
+          return next;
         });
-        // 规划模式：plan 轮完成 → 展示计划卡片（PlanCard 渲染 + 「执行」按钮）
-        if (get().planMode) {
-          const last = get().messages[get().messages.length - 1];
-          if (last?.role === 'assistant') set({ planReady: last.content });
+        // 该轮收尾：丢弃后台存档，切回改用后端落库结果
+        endLiveView(event.sessionId);
+        // 以下副作用只对当前显示的会话执行（后台会话不弹计划卡片、不处理队列）
+        if (isActiveSession(event.sessionId)) {
+          set({ isProcessing: false });
+          // 规划模式：plan 轮完成 → 展示计划卡片（PlanCard 渲染 + 「执行」按钮）
+          if (get().planMode) {
+            const last = get().messages[get().messages.length - 1];
+            if (last?.role === 'assistant') set({ planReady: last.content });
+          }
+          // 自动处理队列中的消息
+          get().processQueue();
         }
-        // 自动处理队列中的消息
-        get().processQueue();
         break;
       }
 
       case 'done': {
-        set((s) => {
-          const msgs = [...s.messages];
-          const last = msgs[msgs.length - 1];
+        withMessages(event.sessionId, (msgs) => {
+          const next = [...msgs];
+          const last = next[next.length - 1];
           if (last && last.isStreaming) {
             const elapsed = Math.round((Date.now() - last.timestamp) / 1000);
-            msgs[msgs.length - 1] = { ...last, isStreaming: false, duration: elapsed };
+            next[next.length - 1] = { ...last, isStreaming: false, duration: elapsed };
           }
-          return { messages: msgs, isProcessing: false };
+          return next;
         });
-        // 自动处理队列中的消息
-        get().processQueue();
+        endLiveView(event.sessionId);
+        // done 是「该会话彻底跑完」的可靠信号：无论它是不是当前显示的会话，
+        // 都要熄掉侧栏的动态边框
+        if (typeof event.sessionId === 'string') get().setSessionRunning(event.sessionId, false);
+        if (isActiveSession(event.sessionId)) {
+          set({ isProcessing: false });
+          // 自动处理队列中的消息
+          get().processQueue();
+        }
         break;
       }
 
       case 'error': {
         const msg = event.message as string;
         // 关键：把错误挂到当前 assistant 消息上，MessageBubble 渲染错误提示块（绝不空白）
-        set((s) => {
-          const msgs = [...s.messages];
-          const last = msgs[msgs.length - 1];
+        withMessages(event.sessionId, (msgs) => {
+          const next = [...msgs];
+          const last = next[next.length - 1];
           if (last && last.role === 'assistant') {
-            msgs[msgs.length - 1] = { ...last, errorMessage: msg };
+            next[next.length - 1] = { ...last, errorMessage: msg };
           }
-          return { messages: msgs };
+          return next;
         });
-        set({ error: msg, isProcessing: false });
+        if (isActiveSession(event.sessionId)) set({ error: msg, isProcessing: false });
         break;
       }
 
       case 'aborted': {
-        set({ isProcessing: false });
+        endLiveView(event.sessionId);
+        if (isActiveSession(event.sessionId)) set({ isProcessing: false });
         break;
       }
 

@@ -2,7 +2,6 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useChatStore } from '../../store/chat-store';
 import { useAuthStore } from '../../store/auth-store';
 import { toast } from '../../store/toast-store';
-import { confirmDialog } from '../../store/confirm-dialog';
 import type { SessionInfo } from '../../types/chat';
 import { exportSession, importSession } from '../../services/api';
 import { isElectron } from '../../services/api-config';
@@ -45,6 +44,46 @@ function SessionItem({
   const inputRef = useRef<HTMLInputElement>(null);
   const itemRef = useRef<HTMLDivElement>(null);
   const ghostsRef = useRef<HTMLElement[]>([]);
+  /** 该会话是否正在执行（含用户切走后仍在后台跑的）——驱动动态边框 */
+  const running = useChatStore((s) => s.runningSessions.includes(session.id));
+
+  /** 删除确认气泡：固定在删除按钮上方弹出（不用全局确认弹窗 —— 那是全屏遮罩样式，
+      与「点一下 ✕ 就地确认」的轻量语义不符）。null = 未展开 */
+  const [confirmBubble, setConfirmBubble] = useState<{ bottom: number; right: number } | null>(null);
+  const bubbleRef = useRef<HTMLDivElement>(null);
+
+  /** 在删除按钮正上方弹出气泡：用 fixed 定位 + 视口坐标 ——
+      .sidebar 是 overflow:hidden、.session-list 是 overflow-y:auto，
+      用 absolute 贴在会话项上会被这两个祖先裁剪掉 */
+  const openConfirmBubble = (btn: HTMLElement) => {
+    const r = btn.getBoundingClientRect();
+    setConfirmBubble({
+      bottom: window.innerHeight - r.top + 8,   // 气泡底边落在按钮上方 8px
+      right: window.innerWidth - r.right,       // 右缘对齐按钮，向左展开（侧栏窄，向右会溢出）
+    });
+  };
+
+  // 气泡展开时：点外部 / Esc 关闭
+  useEffect(() => {
+    if (!confirmBubble) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (bubbleRef.current?.contains(t)) return;
+      // 点 ✕ 自身交给它的 onClick 处理（切换展开/收起）。若这里先关掉，
+      // 那边 click 读到的仍是旧状态，会立刻又打开 —— 表现为「再点 ✕ 关不掉」
+      if (t instanceof HTMLElement && t.closest('.session-item-delete')) return;
+      setConfirmBubble(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setConfirmBubble(null);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [confirmBubble]);
 
   const startDelete = () => {
     const el = itemRef.current;
@@ -55,9 +94,12 @@ function SessionItem({
     // 2) 创建飞行体（body 级 fixed，完整播放飞出动画，不被列表容器裁剪）
     const r = el.getBoundingClientRect();
     const fly = el.cloneNode(true) as HTMLElement;
+    // 确认气泡是临时 UI，不该跟着飞出（它的入场动画还会经冒泡掐断飞行动画，见下方 animationend）
+    fly.querySelector('.session-delete-bubble')?.remove();
     fly.className = fly.className
       .replace(/\bactive\b/g, '')
       .replace(/\bsession-item-removing\b/g, '')
+      .replace(/\bsession-item-running\b/g, '')
       .trim();
     fly.classList.add('session-flying');
     fly.style.left = `${r.left}px`;
@@ -91,7 +133,11 @@ function SessionItem({
     const timer = setInterval(spawnGhost, 220);
 
     // 4) 动画结束：清残影 → 移除飞行体 → 真正删除
-    fly.addEventListener('animationend', () => {
+    // 4) 动画结束：清残影 → 移除飞行体 → 真正删除
+    // 只认飞行体自身的动画结束：animationend 会冒泡，克隆体内部任何元素的动画
+    // 结束都会触发这里（确认气泡曾让飞出动画刚开头就被掐断）
+    fly.addEventListener('animationend', (e) => {
+      if (e.target !== fly) return;
       clearInterval(timer);
       for (const g of ghostsRef.current) g.remove();
       ghostsRef.current = [];
@@ -100,16 +146,15 @@ function SessionItem({
     });
   };
 
-  /** 删除会话：先二次确认（弹窗在鼠标旁），确认后再播放飞出丢弃动画；
-      动画结束后由 startDelete 内部回调真正删除（不另加确认，防双重弹窗） */
-  const handleDeleteClick = async () => {
-    const r = await confirmDialog.confirm({
-      title: '删除会话',
-      message: `删除会话「${session.name}」？此操作不可恢复。`,
-      danger: true,
-      confirmLabel: '删除',
-    });
-    if (r === 'confirm') startDelete();
+  /** 删除会话：就地弹气泡二次确认，确认后再播放飞出丢弃动画；
+      动画结束后由 startDelete 内部回调真正删除 */
+  const handleDeleteClick = (btn: HTMLElement) => {
+    // 再点一次 ✕ = 收起（避免重复弹出时残留旧定位）
+    if (confirmBubble) {
+      setConfirmBubble(null);
+      return;
+    }
+    openConfirmBubble(btn);
   };
 
   useEffect(() => {
@@ -143,8 +188,9 @@ function SessionItem({
   return (
     <div
       ref={itemRef}
-      className={`session-item${isActive ? ' active' : ''}${removing ? ' session-item-removing' : ''}`}
+      className={`session-item${isActive ? ' active' : ''}${removing ? ' session-item-removing' : ''}${running ? ' session-item-running' : ''}`}
       onClick={() => onSwitch(session.id)}
+      title={running ? '该会话正在执行中' : undefined}
     >
       <div className="session-item-info">
         {editing ? (
@@ -172,6 +218,8 @@ function SessionItem({
           </>
         )}
       </div>
+      {/* 执行中标识：旋转加载圈（配合边框流光，让「在干活」更好认） */}
+      {running && <span className="session-item-spinner" aria-hidden="true" />}
       <button
         className="session-item-edit"
         onClick={(e) => {
@@ -186,12 +234,43 @@ function SessionItem({
         className="session-item-delete"
         onClick={(e) => {
           e.stopPropagation();
-          void handleDeleteClick();
+          handleDeleteClick(e.currentTarget);
         }}
         title="删除会话"
       >
         &#10005;
       </button>
+      {/* 删除确认气泡：fixed 定位锚在 ✕ 上方，避开侧栏的 overflow 裁剪 */}
+      {confirmBubble && (
+        <div
+          ref={bubbleRef}
+          className="session-delete-bubble"
+          style={{ bottom: confirmBubble.bottom, right: confirmBubble.right }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="session-delete-bubble-text">删除该会话？</div>
+          <div className="session-delete-bubble-actions">
+            <button
+              type="button"
+              className="session-delete-bubble-cancel"
+              onClick={() => setConfirmBubble(null)}
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              className="session-delete-bubble-confirm"
+              onClick={() => {
+                setConfirmBubble(null);
+                startDelete();
+              }}
+            >
+              删除
+            </button>
+          </div>
+          <span className="session-delete-bubble-arrow" />
+        </div>
+      )}
     </div>
   );
 }

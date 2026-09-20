@@ -99,4 +99,11 @@ export interface SessionInfo {
   mode: AgentMode;
   createdAt: string;
   lastActiveAt: string;
+  /**
+   * 后端此刻是否正在执行该会话的一轮对话。
+   *
+   * runningSessions 是前端内存态，刷新页面 / HMR 热重载后会整个丢失，
+   * 靠这个字段在列表加载时把「执行中」标识恢复回来。
+   */
+  running?: boolean;
 }

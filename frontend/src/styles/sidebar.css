@@ -235,6 +235,72 @@
   border-color: var(--accent);
 }
 
+/**
+ * 正在执行的会话：光带沿边框循环奔跑。
+ *
+ * .active 是「当前打开」的静态标识（accent 实线边框），.session-item-running 是
+ * 「正在干活」的动态标识 —— 用户在 A 执行中切到 B 后，A 的边框仍在跑，一眼看出谁没跑完。
+ * 结束时由 done 事件移除该类。
+ *
+ * 实现：伪元素铺 conic-gradient 并用 mask 挖掉内容区，只留一圈「边框环」——
+ * 这样不覆盖 .session-item 自身的背景（hover/active 的底色照常生效）。
+ * --session-spin-angle 经 @property 注册后才能参与动画（未注册的自定义属性不可插值）。
+ */
+@property --session-spin-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.session-item-running {
+  position: relative;
+  /* 边框改由伪元素绘制，避免与静态 accent 边框叠加 */
+  border-color: transparent;
+}
+
+.session-item-running::before {
+  content: '';
+  position: absolute;
+  /* absolute 的 inset 以 padding box 为准，外扩 1px 恰好覆盖原有 1px 边框 */
+  inset: -1px;
+  padding: 2px;
+  border-radius: calc(var(--radius-sm) + 1px);
+  /* 亮带集中在约 1/4 圈，其余压到 8% —— 明暗对比越强，「光带在跑」越容易被余光捕捉到 */
+  background: conic-gradient(
+    from var(--session-spin-angle),
+    color-mix(in srgb, var(--accent) 8%, transparent) 0deg,
+    var(--accent) 30deg,
+    color-mix(in srgb, var(--accent) 8%, transparent) 95deg,
+    color-mix(in srgb, var(--accent) 8%, transparent) 360deg
+  );
+  /* 挖空内容区：只保留 padding 那圈，即「边框」 */
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  animation: session-border-run 2.2s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes session-border-run {
+  to { --session-spin-angle: 360deg; }
+}
+
+/* 旋转加载圈：给「执行中」一个不必辨认颜色也能看懂的符号 */
+.session-item-spinner {
+  width: 13px;
+  height: 13px;
+  border: 2px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: session-spinner-rotate 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes session-spinner-rotate {
+  to { transform: rotate(360deg); }
+}
+
 .session-item-info {
   flex: 1;
   min-width: 0;
@@ -299,5 +365,82 @@
 .session-item-delete:hover {
   color: var(--danger);
   background-color: rgba(239, 68, 68, 0.1);
+}
+
+/* ─── 删除会话的就地确认气泡 ─────────────────────────
+   锚在 ✕ 按钮上方（坐标由 Sidebar 按视口算好，见 openConfirmBubble）。
+   用 fixed 而非 absolute：.sidebar 是 overflow:hidden、.session-list 是
+   overflow-y:auto，absolute 会被这两个祖先裁掉。 */
+.session-delete-bubble {
+  position: fixed;
+  z-index: 1200;
+  min-width: 148px;
+  padding: 10px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
+  animation: session-bubble-in 0.12s ease-out;
+}
+
+@keyframes session-bubble-in {
+  from { opacity: 0; transform: translateY(4px) scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+
+.session-delete-bubble-text {
+  font-size: 12px;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  white-space: nowrap;
+}
+
+.session-delete-bubble-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.session-delete-bubble-cancel,
+.session-delete-bubble-confirm {
+  padding: 3px 10px;
+  font-size: 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.session-delete-bubble-cancel {
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  background: transparent;
+}
+
+.session-delete-bubble-cancel:hover {
+  color: var(--text-primary);
+  border-color: var(--border-light);
+}
+
+.session-delete-bubble-confirm {
+  color: #fff;
+  background: var(--danger);
+  border: 1px solid var(--danger);
+}
+
+.session-delete-bubble-confirm:hover {
+  filter: brightness(1.08);
+}
+
+/* 指向下方 ✕ 的小三角（气泡右缘与按钮对齐，故三角也靠右） */
+.session-delete-bubble-arrow {
+  position: absolute;
+  bottom: -5px;
+  right: 10px;
+  width: 8px;
+  height: 8px;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  transform: rotate(45deg);
 }
 
