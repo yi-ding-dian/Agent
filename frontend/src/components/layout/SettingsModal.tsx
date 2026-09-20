@@ -797,14 +797,10 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     });
   };
 
-  const handleOverlayClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  };
-
   return (
-    <div className="modal-overlay" onClick={handleOverlayClick}>
+    // 遮罩不响应点击：设置弹窗只经右上角关闭按钮或 Esc 关闭
+    // （原本点遮罩即关闭，与 Agent 详情弹窗统一为「不响应」—— 拖拽/误触时容易意外关闭）
+    <div className="modal-overlay">
       <ResizableModal
         width={920}
         height="min(82vh, 680px)"
@@ -1137,7 +1133,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
           )}
 
           {editingPreset && (
-            <div className="modal-overlay" onClick={() => setEditingPreset(null)}>
+            <div className="modal-overlay">
               <ResizableModal width={480} onEsc={() => setEditingPreset(null)}>
                 <div className="modal-header">
                   <h2>{editingPreset.index === 'new' ? '新增模型' : '编辑模型'}</h2>
@@ -1477,7 +1473,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
           )}
 
           {showMcpModal && (
-            <div className="modal-overlay" onClick={() => setShowMcpModal(false)}>
+            <div className="modal-overlay">
               <ResizableModal width={480} onEsc={() => setShowMcpModal(false)}>
                 <div className="modal-header">
                   <h2>新增外部 MCP 服务</h2>
@@ -1616,7 +1612,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 + 新增服务
               </button>
               {showServiceModal && (
-                <div className="modal-overlay" onClick={handleCloseServiceModal}>
+                <div className="modal-overlay">
                   <ResizableModal width={480} onEsc={handleCloseServiceModal}>
                     <div className="modal-header">
                       <h2>{editingServiceIndex !== null ? '编辑外部服务' : '新增外部服务'}</h2>

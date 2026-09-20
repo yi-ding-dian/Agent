@@ -31,12 +31,12 @@ const TOOL_LABELS: Record<string, string> = {
   subagent: '子代理',
 };
 
-/** 参数/结果摘要：字符串原样，对象 JSON 化（最多 400 字） */
+/** 参数/结果文本：字符串原样，对象 JSON 化。
+ *  不截断 —— 除行内摘要（由 CSS ellipsis 兜底）外，展开区还用它渲染完整 <pre> */
 function formatPayload(payload: unknown): string {
   if (typeof payload === 'string') return payload;
   if (payload === undefined || payload === null) return '';
-  const json = JSON.stringify(payload);
-  return json.length > 400 ? json.slice(0, 400) + '…' : json;
+  return JSON.stringify(payload) ?? '';
 }
 
 /** 时间戳格式：HH:MM:SS.mmm（与主界面 tool-group-time 一致） */
@@ -52,9 +52,9 @@ function formatEventTime(ts?: number): string {
 
 /** 单行参数摘要：字符串原样，对象 JSON 化，截断 ~60 字 */
 function summarizeArgsInline(args: unknown): string {
+  // 不截断：能显示多长就多长，装不下时由 .agent-event-args-inline 的 ellipsis 处理，全文经 title 提示
   if (args === undefined || args === null) return '';
-  const raw = typeof args === 'string' ? args : formatPayload(args);
-  return raw.length > 60 ? raw.slice(0, 60) + '…' : raw;
+  return typeof args === 'string' ? args : formatPayload(args);
 }
 
 /** 事件流 → 展示结构：工具卡片（配对的 start/end）+ 文本增量 + 思考增量 + 结束标记 */
@@ -142,11 +142,12 @@ export function AgentDetailModal({ agent, index, onClose }: AgentDetailModalProp
   // 挂到 document.body：父级 .question-panel 有 backdrop-filter + overflow，
   // 会劫持 fixed 定位并裁剪弹窗，portal 到 body 规避
   // Esc 关闭 / Tab 焦点圈禁由 ResizableModal 统一处理
+  // 遮罩不响应点击：弹窗只经右上角关闭按钮或 Esc 关闭。
+  // 弹窗可拖拽，鼠标滑出边界松手时若响应遮罩点击会导致意外关闭（用户反馈）。
   return createPortal(
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <ResizableModal
         width={620}
-        maxHeight="82vh"
         onEsc={onClose}
       >
         <div className="agent-detail-header">
@@ -252,7 +253,7 @@ export function AgentDetailModal({ agent, index, onClose }: AgentDetailModalProp
                           <span className="agent-event-tool-name">
                             {TOOL_LABELS[card.toolName] || card.toolName || '工具'}
                           </span>
-                          <span className="agent-event-args-inline">
+                          <span className="agent-event-args-inline" title={summarizeArgsInline(card.args)}>
                             {summarizeArgsInline(card.args)}
                           </span>
                           {card.status === 'running' && (

@@ -8,11 +8,9 @@
  *   - Esc 关闭（拦截不穿透底层）+ Tab 焦点圈禁（循环在弹窗内）
  *   - 键盘防穿透：弹窗内非输入元素按键不传给底层视图
  *
- * ModalShell —— 常规模板（遮罩 + 壳 + h3 标题 + body + foot 按钮区，默认仅「关闭」）
- *
- * 用法：
- *   <div className="modal-overlay" onClick={onClose}>
- *     <ResizableModal width={660}>
+ * 用法（遮罩不响应点击：弹窗只经关闭按钮 / Esc 关闭，避免拖拽时鼠标滑出边界松手误关）：
+ *   <div className="modal-overlay">
+ *     <ResizableModal width={660} onEsc={onClose}>
  *       <h3>标题</h3>
  *       <div className="body">内容</div>
  *       <div className="foot"><button onClick={onClose}>取消</button></div>
@@ -23,6 +21,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 
 /** 边缘热区厚度(px) */
+// 拖拽热区厚度（像素）—— 同时决定提示条的视觉粗细：
+// 6px 为视觉观感（10px 用户反馈过粗）；命中难度由 .mr-edge 不透明度提高（0.35）补偿
 const EDGE = 6;
 
 /** 8 方向 → 拖拽光标 */
@@ -258,31 +258,3 @@ export function ResizableModal(props: {
   );
 }
 
-/** 通用弹窗壳：遮罩 + 可调整大小容器 + 标题行 + 底部操作区（默认仅「关闭」） */
-export function ModalShell(props: {
-  title: ReactNode;
-  /** 标题图标：emoji（依赖系统字体，个别新字符可能缺字形） */
-  icon?: ReactNode;
-  width?: number;
-  /** 最小宽度（默认 480） */
-  minWidth?: number;
-  /** 底部操作区；不传时仅「关闭」按钮 */
-  foot?: ReactNode;
-  onClose: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <div className="modal-overlay" onClick={props.onClose}>
-      <ResizableModal width={props.width ?? 560} minWidth={props.minWidth} onEsc={props.onClose}>
-        <h3>
-          {props.icon && <span style={{ marginRight: 8 }}>{props.icon}</span>}
-          {props.title}
-        </h3>
-        <div className="body">{props.children}</div>
-        <div className="foot">
-          {props.foot ?? <button onClick={props.onClose}>关闭</button>}
-        </div>
-      </ResizableModal>
-    </div>
-  );
-}

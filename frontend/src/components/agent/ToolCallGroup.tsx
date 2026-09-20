@@ -22,10 +22,9 @@ function formatArgs(tc: ToolCallInfo): string {
       return a.command || '';
     case 'search_web':
       return a.query || '';
-    case 'run_python': {
-      const code: string = a.code || '';
-      return code.length > 60 ? code.slice(0, 60) + '...' : code;
-    }
+    case 'run_python':
+      // 不做字数截断：能显示多长就多长，装不下时才由容器 ellipsis，全文经 title 悬停提示
+      return a.code || '';
     default:
       return JSON.stringify(a);
   }
@@ -75,7 +74,7 @@ export function ToolCallGroup({ toolCalls }: ToolCallGroupProps) {
               <StatusIcon status={tc.status} />
               <span className="tool-group-time">{formatTime(tc.startTime)}</span>
               <span className="tool-group-action">{TOOL_LABELS[tc.toolName] || tc.toolName}</span>
-              <span className="tool-group-args">{formatArgs(tc)}</span>
+              <span className="tool-group-args" title={formatArgs(tc)}>{formatArgs(tc)}</span>
               {tc.status === 'error' && tc.errorMessage && (
                 <div className="tool-group-error-msg">{tc.errorMessage}</div>
               )}
