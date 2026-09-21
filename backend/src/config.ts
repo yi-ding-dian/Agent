@@ -44,7 +44,9 @@ export const config = {
   agentBaseUrl: getStr('AGENT_BASE_URL', ''),
   agentModel: getStr('AGENT_MODEL', ''),
   agentApiKey: getStr('AGENT_API_KEY', ''),
-  workDir: getStr('WORK_DIR', process.cwd()),
+  // 默认工作目录 = **项目根**（backend 的上一级），与上面的 dataDir / frontendDir 同一约定。
+  // 注意别用裸 process.cwd()：那会落到 backend/ —— 后端代码目录，不是 Agent 该干活的地方。
+  workDir: getStr('WORK_DIR', path.resolve(process.cwd(), '..')),
   sessionTimeoutMs: 30 * 60 * 1000,
   llmTimeoutMs: getInt('LLM_TIMEOUT_MS', 120000),
   defaultMaxTokens: 65535,

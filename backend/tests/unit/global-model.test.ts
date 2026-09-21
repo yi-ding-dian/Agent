@@ -82,14 +82,14 @@ test('global-model-config: id/baseUrl 不完整时 setGlobalModel 抛错且不�
 
 test('createSession: 无 overrides 且无全局默认 → 抛 NoDefaultModelError（明确报错，不悄悄用任何模型）', () => {
   const mgr = getSessionManager();
-  assert.throws(() => mgr.createSession(99, 'chat'), NoDefaultModelError);
-  assert.throws(() => mgr.createSession(99, 'agent'), NoDefaultModelError);
+  assert.throws(() => mgr.createSession(99, { mode: 'chat' }), NoDefaultModelError);
+  assert.throws(() => mgr.createSession(99, { mode: 'agent' }), NoDefaultModelError);
 });
 
 test('createSession: 有全局默认 → 使用全局默认创建成功', () => {
   const mgr = getSessionManager();
   setGlobalModel(7, { id: 'deepseek-chat', baseUrl: 'https://api.deepseek.com', apiKey: '' });
-  const id = mgr.createSession(7, 'chat');
+  const id = mgr.createSession(7, { mode: 'chat' });
   const session = mgr.getSession(id);
   const model = session?.model as { id: string; baseUrl: string };
   assert.equal(model.id, 'deepseek-chat');
@@ -100,9 +100,12 @@ test('createSession: 有全局默认 → 使用全局默认创建成功', () => 
 test('createSession: 请求携带的 overrides 优先于全局默认', () => {
   const mgr = getSessionManager();
   setGlobalModel(8, { id: 'global-model', baseUrl: 'http://global/v1', apiKey: '' });
-  const id = mgr.createSession(8, 'chat', undefined, undefined, undefined, {
-    id: 'override-model',
-    baseUrl: 'http://override/v1',
+  const id = mgr.createSession(8, {
+    mode: 'chat',
+    modelOverrides: {
+      id: 'override-model',
+      baseUrl: 'http://override/v1',
+    },
   });
   const model = mgr.getSession(id)?.model as { id: string; baseUrl: string };
   assert.equal(model.id, 'override-model');

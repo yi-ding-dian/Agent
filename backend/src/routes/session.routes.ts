@@ -2,6 +2,7 @@ import { Router, text as expressText } from 'express';
 import type { Request, Response } from 'express';
 import { getSessionManager } from '../services/session-manager.js';
 import { serializeSessionToJsonl, parseSessionJsonl } from '../services/session-jsonl.js';
+import { normalizeWorkDir } from '../utils/workdir.js';
 
 export const sessionRouter = Router();
 
@@ -24,12 +25,14 @@ sessionRouter.get('/sessions', (req: Request, res: Response): void => {
   const runningIds = new Set(mgr.listRunningSessionIds(userId));
 
   // 以数据库记录为主，内存中的覆盖
-  const sessionMap = new Map<string, { id: string; name: string; mode: string; createdAt: string; lastActiveAt: string; running: boolean }>();
+  // work_dir 两路都要带：漏了会出现「PUT 切目录成功，切一下列表又闪回旧目录」
+  const sessionMap = new Map<string, { id: string; name: string; mode: string; work_dir: string | null; createdAt: string; lastActiveAt: string; running: boolean }>();
   for (const s of dbSessions) {
     sessionMap.set(s.id, {
       id: s.id,
       name: s.name,
       mode: s.mode,
+      work_dir: s.workDir ?? null,
       createdAt: s.createdAt,
       lastActiveAt: s.lastActiveAt,
       running: runningIds.has(s.id),
@@ -40,6 +43,7 @@ sessionRouter.get('/sessions', (req: Request, res: Response): void => {
       id: s.id,
       name: s.name,
       mode: s.mode,
+      work_dir: (s as any).work_dir ?? null,
       createdAt: (s as any).createdAt instanceof Date ? (s as any).createdAt.toISOString() : String((s as any).createdAt),
       lastActiveAt: (s as any).lastActiveAt instanceof Date ? (s as any).lastActiveAt.toISOString() : String((s as any).lastActiveAt),
       running: runningIds.has(s.id),
@@ -56,18 +60,34 @@ sessionRouter.get('/sessions', (req: Request, res: Response): void => {
 // POST /api/sessions — 创建会话
 sessionRouter.post('/sessions', (req: Request, res: Response): void => {
   const userId = getUserId(req);
-  const { name, mode, systemPrompt, modelOverrides } = req.body as {
+  const { name, mode, systemPrompt, modelOverrides, workDir } = req.body as {
     name?: string;
     mode?: 'chat' | 'agent';
     systemPrompt?: string;
     modelOverrides?: { id?: string; baseUrl?: string; apiKey?: string; thinkingLevel?: string };
+    workDir?: string;
   };
   const mgr = getSessionManager();
+  // workDir 可选：不传 = NULL = 跟随全局默认（config.work_dir 自此只是「默认值」）
+  let normalizedWorkDir: string | null = null;
+  if (workDir !== undefined) {
+    const r = normalizeWorkDir(workDir);
+    if (!r.ok) {
+      res.status(400).json({ error: r.error });
+      return;
+    }
+    normalizedWorkDir = r.value;
+  }
   // 透传 modelOverrides：新会话创建时即应用前端当前选中的默认模型配置。
   // 否则会出现"建会话用 Qwen、发消息想用 DeepSeek"的错配——agent-factory 会用默认
-  // 配置加载模型（本地 Qwen 未加载）→ Failed to load model。initialMessages 传
-  // undefined 保持 createSession 参数位置对齐（第 6 参为 modelOverrides）。
-  const id = mgr.createSession(userId, mode ?? 'chat', systemPrompt, name, undefined, modelOverrides);
+  // 配置加载模型（本地 Qwen 未加载）→ Failed to load model。
+  const id = mgr.createSession(userId, {
+    mode: mode ?? 'chat',
+    systemPrompt,
+    name,
+    modelOverrides,
+    workDir: normalizedWorkDir,
+  });
   const info = mgr.getSessionInfo(id);
   res.status(201).json(info);
 });
@@ -150,7 +170,15 @@ sessionRouter.post(
     const name = meta?.name || '导入的会话';
 
     const mgr = getSessionManager();
-    const id = mgr.createSession(userId, mode, undefined, name);
+    // workDir 经校验后沿用；不合法（多因导入文件来自别的机器、路径不存在）则忽略并落 NULL，
+    // 不能因此阻断整份导入
+    let importedWorkDir: string | null = null;
+    if (typeof meta?.workDir === 'string' && meta.workDir) {
+      const r = normalizeWorkDir(meta.workDir);
+      if (r.ok) importedWorkDir = r.value;
+      else console.warn(`[SessionImport] 忽略无效的 workDir "${meta.workDir}"：${r.error}`);
+    }
+    const id = mgr.createSession(userId, { mode, name, workDir: importedWorkDir });
     const ok = mgr.persistMessages(id, messages);
     if (!ok) {
       mgr.deleteSession(id);
@@ -175,13 +203,34 @@ sessionRouter.put('/sessions/:id', (req: Request, res: Response): void => {
     return;
   }
 
-  const { name } = req.body as { name?: string };
-  if (!name) {
-    res.status(400).json({ error: '缺少必填参数: name' });
+  const { name, workDir } = req.body as { name?: string; workDir?: string | null };
+  if (name === undefined && workDir === undefined) {
+    res.status(400).json({ error: '缺少参数：name 或 workDir 至少提供一个' });
     return;
   }
-  const ok = mgr.updateSession(id, { name });
-  if (!ok) {
+
+  // workDir = null 表示「清除显式目录，回到跟随全局默认」
+  let normWorkDir: string | null | undefined;
+  if (workDir !== undefined) {
+    if (workDir === null) {
+      normWorkDir = null;
+    } else {
+      const r = normalizeWorkDir(workDir);
+      if (!r.ok) {
+        res.status(400).json({ error: r.error });
+        return;
+      }
+      normWorkDir = r.value;
+    }
+  }
+
+  const result = mgr.updateSession(id, { name, workDir: normWorkDir });
+  if (!result.ok) {
+    if (result.reason === 'running') {
+      // 工具正拿旧目录在执行，中途换掉会出现「文件写了一半、目录却变了」
+      res.status(409).json({ error: '会话正在执行中，请先停止后再切换工作目录', code: 'SESSION_RUNNING' });
+      return;
+    }
     res.status(404).json({ error: '会话未找到' });
     return;
   }

@@ -45,6 +45,8 @@ syncRouter.post('/sessions/:id/sync', (req: Request, res: Response): void => {
     name: name || '对话',
     mode: mode || 'chat',
     messages: messages || [],
+    // Electron 客户端未带 work_dir 时落 NULL = 跟随全局默认（这是会话级的默认语义）
+    workDir: typeof req.body?.work_dir === 'string' ? req.body.work_dir : null,
   });
 
   console.log(`[Sync] session ${sessionId} synced (${messages?.length ?? 0} messages)`);

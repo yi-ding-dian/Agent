@@ -40,7 +40,11 @@ executeRouter.post('/execute', async (req: Request, res: Response): Promise<void
     session = undefined;
   }
   if (!session) {
-    const newId = mgr.createSession(userId, 'agent', EXECUTE_SYSTEM_PROMPT, undefined, undefined, modelOverrides);
+    const newId = mgr.createSession(userId, {
+      mode: 'agent',
+      systemPrompt: EXECUTE_SYSTEM_PROMPT,
+      modelOverrides,
+    });
     session = mgr.getSession(newId);
   }
 

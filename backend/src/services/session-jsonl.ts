@@ -19,6 +19,8 @@ export interface JsonlMetaLine {
   sessionId?: string;
   name?: string;
   mode?: 'chat' | 'agent' | string;
+  /** 会话级工作目录（仅显式选择过才写；老导出文件没有此字段 → 导入后跟随全局默认） */
+  workDir?: string;
   createdAt?: string;
 }
 
@@ -41,6 +43,8 @@ export interface SessionJsonlMeta {
   sessionId?: string;
   name?: string;
   mode?: string;
+  /** 会话级工作目录；undefined = 导出时未显式选择，导入后跟随全局默认 */
+  workDir?: string;
   createdAt?: string;
 }
 
@@ -88,7 +92,7 @@ export function sanitizeMessageForExport(msg: Record<string, unknown>): JsonlMes
  * 序列化会话为 JSONL 文本（meta 行 + 消息行）
  */
 export function serializeSessionToJsonl(
-  info: { id: string; name: string; mode: string; createdAt: Date | string },
+  info: { id: string; name: string; mode: string; work_dir?: string | null; createdAt: Date | string },
   messages: Record<string, unknown>[],
 ): string {
   const lines: string[] = [];
@@ -100,6 +104,8 @@ export function serializeSessionToJsonl(
     mode: info.mode,
     createdAt: info.createdAt instanceof Date ? info.createdAt.toISOString() : String(info.createdAt),
   };
+  // 仅显式选择过目录时写入：未选择(NULL)本就不该固化，写 null 只会让老版本解析出脏值
+  if (info.work_dir) meta.workDir = info.work_dir;
   lines.push(JSON.stringify(meta));
 
   for (const msg of messages) {
@@ -130,6 +136,7 @@ function parseLine(raw: string): JsonlMetaLine | JsonlMessageLine | null {
       sessionId: typeof obj.sessionId === 'string' ? obj.sessionId : undefined,
       name: typeof obj.name === 'string' ? obj.name : undefined,
       mode: typeof obj.mode === 'string' ? obj.mode : undefined,
+      workDir: typeof obj.workDir === 'string' ? obj.workDir : undefined,
       createdAt: typeof obj.createdAt === 'string' ? obj.createdAt : undefined,
     };
   }
@@ -180,6 +187,7 @@ export function parseSessionJsonl(text: string): { meta: SessionJsonlMeta | null
       if (line.sessionId) meta.sessionId = line.sessionId;
       if (line.name) meta.name = line.name;
       if (line.mode) meta.mode = line.mode;
+      if (line.workDir) meta.workDir = line.workDir;
       if (line.createdAt) meta.createdAt = line.createdAt;
       continue;
     }

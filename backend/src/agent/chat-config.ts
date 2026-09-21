@@ -18,8 +18,14 @@ export const CHAT_SYSTEM_PROMPT = '你是一个友好的对话助手。请根据
  * - 不启用 list_files：与 grep_search 功能重叠（grep 即可定位文件），完整目录树属于
  *   agent 模式的自主探索场景；chat 模式保持工具面精简
  */
-export function createChatTools(): AgentTool<any>[] {
-  return [createSearchWebTool(), createGrepSearchTool(config.workDir), createEditFileTool(config.workDir)];
+/**
+ * Chat 模式工具。
+ *
+ * workDir 由调用方传入（会话级）：此前这里直接读全局 config.workDir，
+ * 导致 chat 模式的会话无法各自指向不同目录。
+ */
+export function createChatTools(workDir: string): AgentTool<any>[] {
+  return [createSearchWebTool(), createGrepSearchTool(workDir), createEditFileTool(workDir)];
 }
 
 /**

@@ -57,6 +57,8 @@ export interface SessionOptions {
   systemPrompt?: string;
   modelOverrides?: ModelOverrides;
   initialMessages?: { role: string; content: string }[];
+  /** 会话级工作目录（绝对路径）；不传 = 跟随全局默认 config.workDir */
+  workDir?: string | null;
 }
 
 /** 广播给主进程的引擎事件（含会话标识） */
@@ -93,6 +95,13 @@ export class AgentEngine {
    * 会话销毁时对应缓存一并清理（防内存泄漏）。
    */
   private toolsBySession = new Map<string, AgentTool<any>[]>();
+  /**
+   * 各会话当前生效的工作目录（已解析：显式值 ?? 全局默认）。
+   *
+   * 工具以闭包捕获 workDir，改目录必须换一套工具 —— 靠这份记录与最新请求比对，
+   * 变了就重建该会话的 service（与模型切换同节奏：下一次发送时生效）。
+   */
+  private sessionWorkDirs = new Map<string, string>();
   private listeners = new Set<(ev: EngineEvent) => void>();
   private initErrors: string[] = [];
   private extToolNames: string[] = [];
@@ -183,11 +192,11 @@ export class AgentEngine {
    * 组装 —— subagent 工具闭包捕获 model，会话间不能复用；扩展/MCP 工具为
    * 引擎级共享对象（无 model 闭包），继续复用同一批实例，仅合并进每会话数组。
    */
-  private getTools(sessionId: string, model: Model<any>): AgentTool<any>[] {
+  private getTools(sessionId: string, model: Model<any>, workDir: string): AgentTool<any>[] {
     const cached = this.toolsBySession.get(sessionId);
     if (cached) return cached;
 
-    let tools: AgentTool<any>[] = createAgentTools(config.workDir, { model });
+    let tools: AgentTool<any>[] = createAgentTools(workDir, { model });
 
     const extTools = getExtensionTools();
     if (extTools.length > 0) {
@@ -214,9 +223,35 @@ export class AgentEngine {
 
   /** 获取或创建会话（不持久化，由主进程负责 sync） */
   getOrCreate(sessionId: string, opts: SessionOptions): AgentSessionService {
+    const desiredWorkDir = opts.workDir || config.workDir;
+    const prevWorkDir = this.sessionWorkDirs.get(sessionId);
     const existing = this.sessions.get(sessionId);
+
+    // 工作目录变了：工具以闭包捕获 workDir（见 createCustomTools），必须换一套 ——
+    // 即重建 service。与模型切换同节奏：主进程在 chat:send 时透传最新目录，下一次发送生效。
+    if (existing && prevWorkDir !== undefined && prevWorkDir !== desiredWorkDir) {
+      console.log(`[AgentEngine] workDir changed for ${sessionId}: ${prevWorkDir} -> ${desiredWorkDir}, rebuilding`);
+      // 必须在 dispose 之前取出：重建后原样恢复，历史不丢
+      const keptMessages = existing.messages;
+      this.disposeSession(sessionId);
+      const rebuilt = this.createService(sessionId, opts, desiredWorkDir);
+      rebuilt.replaceMessages(keptMessages);
+      return rebuilt;
+    }
     if (existing) return existing;
 
+    return this.createService(sessionId, opts, desiredWorkDir);
+  }
+
+  /**
+   * 按给定（已解析的）工作目录创建并登记会话 service。
+   * 不含「会话已存在」的判断 —— 那是 getOrCreate 的职责。
+   */
+  private createService(
+    sessionId: string,
+    opts: SessionOptions,
+    workDir: string,
+  ): AgentSessionService {
     let model;
     let tools: AgentTool<any>[];
     let effectivePrompt: string;
@@ -239,11 +274,11 @@ export class AgentEngine {
       model = createQwenModel(modelCfg);
       // model 必须在工具创建前就绪：subagent 工具闭包捕获该 model，
       // 子代理继承主会话模型（含 modelOverrides 覆盖，如 DeepSeek）。
-      tools = this.getTools(sessionId, model);
+      tools = this.getTools(sessionId, model, workDir);
       effectivePrompt = opts.systemPrompt || buildAgentSystemPrompt(getSkills());
     } else {
       model = createQwenModel(modelCfg);
-      tools = createChatTools();
+      tools = createChatTools(workDir);
       effectivePrompt = opts.systemPrompt || CHAT_SYSTEM_PROMPT;
     }
 
@@ -272,6 +307,7 @@ export class AgentEngine {
     });
 
     this.sessions.set(sessionId, service);
+    this.sessionWorkDirs.set(sessionId, workDir);
     return service;
   }
 
@@ -306,6 +342,7 @@ export class AgentEngine {
     this.sessions.delete(sessionId);
     // 清理该会话的工具缓存（subagent 闭包持有 model 引用，释放防泄漏）
     this.toolsBySession.delete(sessionId);
+    this.sessionWorkDirs.delete(sessionId);
   }
 
   /** 活跃会话 ID 列表（退出时主进程逐个 sync） */

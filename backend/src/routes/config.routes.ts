@@ -203,30 +203,17 @@ configRouter.post('/config', (req: Request, res: Response): void => {
     runtimeConfig.advanced = advConfig;
   }
 
-  // 如果 work_dir 发生变化，重建所有 agent 模式的 session
+  // 全局 work_dir 现在只是「未显式选择目录的会话」的默认值。
+  // 显式选过目录的会话免疫（这正是会话级改造的目的）；继承的会话需要重建 service
+  // 才能换掉工具里闭包捕获的目录，故只刷新它们。
+  //
+  // 此前这里走 deleteSession + createSession 重建所有 agent 会话，有三个 bug：
+  // userId 硬编码 1、未传 forceId 导致会话 ID 变了、丢 name/systemPrompt。已废弃。
   if (newWorkDir !== undefined && oldWorkDir !== newWorkDir) {
-    console.log(`[ConfigRoute] Work directory changed from "${oldWorkDir}" to "${newWorkDir}", rebuilding agent sessions`);
-    const mgr = getSessionManager();
-    for (const sessionId of mgr.listSessionIds()) {
-      const session = mgr.getSession(sessionId);
-      if (session && session.mode === 'agent') {
-        console.log(`[ConfigRoute] Rebuilding agent session: ${sessionId}`);
-        // 保存当前会话的消息历史
-        const messages = [...session.messages];
-        // 销毁旧 session
-        mgr.deleteSession(sessionId);
-        // 重新创建（使用新的 work_dir）
-        const newSessionId = mgr.createSession(
-          1, // userId，实际应该从请求中获取
-          'agent',
-          undefined,
-          undefined,
-          // AgentMessage 联合类型中 BashExecutionMessage 等无 content 字段，先做 in 收窄再取值
-          messages.map(m => ({ role: m.role, content: 'content' in m && typeof m.content === 'string' ? m.content : '' })),
-        );
-        console.log(`[ConfigRoute] Rebuilt session ${sessionId} -> ${newSessionId}`);
-      }
-    }
+    const n = getSessionManager().refreshInheritedWorkDirs();
+    console.log(
+      `[ConfigRoute] Work directory default changed "${oldWorkDir}" -> "${newWorkDir}", refreshed ${n} inheriting session(s)`,
+    );
   }
 
   res.json({ status: 'success' });

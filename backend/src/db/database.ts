@@ -80,6 +80,7 @@ export async function initDatabase(dataDir: string): Promise<void> {
       name TEXT NOT NULL,
       mode TEXT NOT NULL DEFAULT 'chat',
       messages TEXT NOT NULL DEFAULT '[]',
+      work_dir TEXT,
       created_at TEXT DEFAULT (datetime('now', 'localtime')),
       last_active_at TEXT DEFAULT (datetime('now', 'localtime')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -98,6 +99,8 @@ export async function initDatabase(dataDir: string): Promise<void> {
   // 迁移已有数据库：添加新列（sql.js 对重复 ALTER TABLE 会抛异常，忽略）
   try { db.run("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'"); } catch {}
   try { db.run("ALTER TABLE auth_tokens ADD COLUMN expires_at TEXT NOT NULL DEFAULT ''"); } catch {}
+  // 会话级工作目录：可空 —— 老行为 NULL，读取时回退全局默认（config.workDir 降级为「默认值」）
+  try { db.run("ALTER TABLE chat_sessions ADD COLUMN work_dir TEXT"); } catch {}
 
   saveDb();
 }

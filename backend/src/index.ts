@@ -98,6 +98,10 @@ async function main() {
       session = undefined;
     }
 
+    // 先删后建路径必须在 deleteSession **之前**捕获工作目录 ——
+    // deleteSession 会连 DB 行一起删掉，删完再读就只剩 NULL 了
+    const prevWorkDir = sessionId ? mgr.getSessionWorkDir(sessionId) : undefined;
+
     // rebuild: 不管 session 是否存在，都要用 history 重建
     if (rebuild && history && history.length > 0) {
       console.log(`[WS] Rebuild requested, history=${history.length}, sessionInMem=${!!session}`);
@@ -123,7 +127,13 @@ async function main() {
     }
 
     if (!session) {
-      const newId = mgr.createSession(socket.userId, mode, undefined, undefined, history, modelOverrides, rebuildSessionId);
+      const newId = mgr.createSession(socket.userId, {
+        mode,
+        initialMessages: history,
+        modelOverrides,
+        forceId: rebuildSessionId,
+        workDir: prevWorkDir,
+      });
       session = mgr.getSession(newId);
       isNewSession = true;
     }
