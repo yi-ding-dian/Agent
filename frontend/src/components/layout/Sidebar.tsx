@@ -5,6 +5,7 @@ import { toast } from '../../store/toast-store';
 import type { SessionInfo } from '../../types/chat';
 import { exportSession, importSession } from '../../services/api';
 import { isElectron } from '../../services/api-config';
+import { formatRelativeTime } from '../../utils/time';
 
 const STORAGE_KEY = 'myagent-sidebar-width';
 const MIN_WIDTH = 60;
@@ -46,6 +47,14 @@ function SessionItem({
   const ghostsRef = useRef<HTMLElement[]>([]);
   /** 该会话是否正在执行（含用户切走后仍在后台跑的）——驱动动态边框 */
   const running = useChatStore((s) => s.runningSessions.includes(session.id));
+
+  // 相对时间要随分钟推进（「刚刚」→「1 分钟前」、「今天 15:42」→ 跨天后「昨天 15:42」），
+  // 否则页面开着不动时文案会凝固。每分钟一次重渲染，开销可忽略。
+  const [, setMinuteTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setMinuteTick((n) => n + 1), 60_000);
+    return () => clearInterval(t);
+  }, []);
 
   /** 删除确认气泡：固定在删除按钮上方弹出（不用全局确认弹窗 —— 那是全屏遮罩样式，
       与「点一下 ✕ 就地确认」的轻量语义不符）。null = 未展开 */
@@ -213,7 +222,7 @@ function SessionItem({
               {session.name}
             </div>
             <div className="session-item-meta">
-              {new Date(session.lastActiveAt).toLocaleDateString('zh-CN')}
+              {formatRelativeTime(session.lastActiveAt)}
             </div>
           </>
         )}
