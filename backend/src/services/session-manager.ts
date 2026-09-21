@@ -311,6 +311,9 @@ export class SessionManager {
           if (m.toolCallId) base.toolCallId = m.toolCallId;
           if (m.toolName) base.toolName = m.toolName;
           if (m.isError !== undefined) base.isError = m.isError;
+          // 工具自定义细节必须一并返回：subagent 的「最终摘要 + 工具调用列表」就在这里，
+          // 漏掉后切换会话回来只剩任务描述（过程事件流已不在内存）
+          if (m.details !== undefined) base.details = m.details;
         }
         return base;
       });
@@ -374,6 +377,8 @@ export class SessionManager {
           if (m.toolCallId) base.toolCallId = m.toolCallId;
           if (m.toolName) base.toolName = m.toolName;
           if (m.isError !== undefined) base.isError = m.isError;
+          // 同 getSessionHistory：details 是 subagent 摘要与工具调用列表的唯一载体，必须落库
+          if (m.details !== undefined) base.details = m.details;
         }
         return base;
       }),

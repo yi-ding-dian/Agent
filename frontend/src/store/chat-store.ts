@@ -291,18 +291,38 @@ function rebuildAgentsFromMessages(messages: ChatMessage[]): AgentInfo[] {
       const task = stripTaskPrefix(
         typeof (tc.args as any)?.task === 'string' ? (tc.args as any).task : '',
       );
+      // aborted 优先（用户主动停止）；completed 之外（error/running/pending）均视为未正常完成
+      const status = details?.aborted
+        ? 'aborted'
+        : tc.status === 'completed'
+          ? 'completed'
+          : 'error';
+
+      // 用 details.toolCalls 重建「工具调用 (N)」列表。
+      // 实时过程流（events）不随消息持久化，这是唯一留存的调用记录 —— 但它是个精简版
+      // （只有工具名 + 参数字符串，没有 id/结果），所以卡片只呈现「调用了什么」。
+      const events: SubagentEvent[] = [];
+      if (Array.isArray(details?.toolCalls)) {
+        for (const c of details.toolCalls as any[]) {
+          let args: unknown = c?.args;
+          if (typeof args === 'string') {
+            try { args = JSON.parse(args); } catch { /* 非 JSON，原样展示 */ }
+          }
+          // 成对推入：buildEventView 用栈配对 start/end 成一张卡片
+          events.push({ kind: 'tool_start', toolName: c?.name ?? '', args });
+          events.push({ kind: 'tool_end', toolName: c?.name ?? '', isError: false });
+        }
+      }
+      // 仅在正常完成时补结束标记（error/aborted 由 AgentDetailModal 按 status 另行呈现）
+      if (events.length && status === 'completed') events.push({ kind: 'agent_end' });
+
       agents.push({
         id: tc.id,
         task,
-        // aborted 优先（用户主动停止）；completed 之外（error/running/pending）均视为未正常完成
-        status: details?.aborted
-          ? 'aborted'
-          : tc.status === 'completed'
-            ? 'completed'
-            : 'error',
+        status,
         startedAt: tc.startTime ?? m.timestamp,
         endedAt: tc.endTime,
-        events: [],
+        events,
         summary: typeof details?.summary === 'string' ? details.summary : undefined,
         eventsLost: true,
       });
@@ -345,7 +365,20 @@ function apiMessagesToChatMessages(apiMessages: any[]): ChatMessage[] {
       let j = i + 1;
       while (j < apiMessages.length && apiMessages[j].role !== 'user') {
         if (apiMessages[j].role === 'toolResult') {
-          // toolResult 已通过 assistant 的 toolCall block 展示，直接跳过
+          // 把结果合并回对应的 toolCall。
+          // 此前这里是「直接跳过」，理由是「已通过 assistant 的 toolCall block 展示」——
+          // 但 toolCall block 只带 id/name/arguments，结果根本不在里面，于是
+          // toolCalls[i].result 永远 undefined：主界面工具卡片展开看不到结果，
+          // 子 Agent 详情也取不到 details.summary（切回会话后只剩任务描述的主因之一）。
+          const tr = apiMessages[j] as any;
+          const target = chatMsg.toolCalls?.find((t) => t.id === tr.toolCallId);
+          if (target) {
+            // 与实时路径（tool_end 事件的 result）保持同一结构：{ content, details }
+            target.status = tr.isError ? 'error' : 'completed';
+            target.result = { content: tr.content, details: tr.details };
+            target.endTime = tr.timestamp;
+            if (tr.isError) target.errorMessage = extractTextContent(tr.content) || undefined;
+          }
           j++;
         } else if (apiMessages[j].role === 'assistant') {
           appendAssistantContent(apiMessages[j], chatMsg);
@@ -558,7 +591,18 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       // 新会话创建时即应用当前默认模型，避免"建会话用 Qwen、发消息想用 DeepSeek 不生效"
       const llmOverrides = getLlmOverrides();
       const session = await api.createSession(undefined, mode, llmOverrides);
-      set((s) => ({ sessions: [session, ...s.sessions], activeSessionId: session.id, messages: [], agents: [], flyRequest: null, totalUsage: { input: 0, output: 0, total: 0 } }));
+      // 必须重置会话级状态：isProcessing 若沿用上一个会话（它可能正在跑），
+      // 新会话的输入框会错误显示「AI 正在回复…」；error 同理会把旧会话的报错带过来
+      set((s) => ({
+        sessions: [session, ...s.sessions],
+        activeSessionId: session.id,
+        messages: [],
+        agents: [],
+        flyRequest: null,
+        totalUsage: { input: 0, output: 0, total: 0 },
+        isProcessing: false,
+        error: null,
+      }));
     } catch (err: any) {
       // 无任何模型配置（未选中预设且后端无全局默认）时后端返回 400
       // "未配置默认模型，请在设置→模型设置中选择模型"，展示给用户而非静默
