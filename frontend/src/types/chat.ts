@@ -106,4 +106,11 @@ export interface SessionInfo {
    * 靠这个字段在列表加载时把「执行中」标识恢复回来。
    */
   running?: boolean;
+  /**
+   * 会话级工作目录；null/undefined = 未显式选择，跟随全局默认（config.work_dir）。
+   *
+   * 全局 config.work_dir 自会话级改造后只是「默认值」：只在 work_dir 为空时生效，
+   * 显式选过目录的会话不受全局变更影响。
+   */
+  work_dir?: string | null;
 }

@@ -4,6 +4,7 @@ import { useAuthStore } from '../../store/auth-store';
 import { toast } from '../../store/toast-store';
 import { confirmDialog } from '../../store/confirm-dialog';
 import { ResizableModal } from '../common/ResizableModal';
+import { DirBrowser } from '../common/DirBrowser';
 import type { AdvancedConfig, ConfigData, ExtensionInfo, ExternalServiceEntry, McpServerConfig, ToolPermissionValue } from '../../types/api';
 import * as api from '../../services/api';
 import { isElectron } from '../../services/api-config';
@@ -67,76 +68,6 @@ const DEFAULT_PERMISSIONS: Record<string, ToolPermissionValue> = {
   remember: 'allow',
   subagent: 'allow',
 };
-
-function DirBrowser({
-  currentPath,
-  onSelect,
-  onClose,
-}: {
-  currentPath: string;
-  onSelect: (path: string) => void;
-  onClose: () => void;
-}) {
-  const [dirPath, setDirPath] = useState(currentPath);
-  const [entries, setEntries] = useState<{ dirs: string[]; files: string[]; parent: string | null }>({ dirs: [], files: [], parent: null });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const loadDir = useCallback(async (path: string) => {
-    setLoading(true);
-    setError('');
-    try {
-      const data = await api.listDirectory(path);
-      setEntries({ dirs: data.directories, files: data.files, parent: data.parent });
-    } catch (e: any) {
-      setError(e.message || '读取失败');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadDir(dirPath);
-  }, [dirPath, loadDir]);
-
-  return (
-    <div className="dir-browser-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <ResizableModal width={480} maxHeight="70vh" onEsc={onClose}>
-        <div className="dir-browser-header">
-          <span className="dir-browser-title">选择目录</span>
-          <button className="modal-close-btn" onClick={onClose}>&#10005;</button>
-        </div>
-        <div className="dir-browser-path">{dirPath}</div>
-        <div className="dir-browser-list">
-          {loading && <div className="dir-browser-loading">加载中...</div>}
-          {error && <div className="dir-browser-error">{error}</div>}
-          {!loading && !error && entries.parent !== null && (
-            <div className="dir-browser-item dir-browser-up" onClick={() => setDirPath(entries.parent!)}>
-              ..
-            </div>
-          )}
-          {!loading && !error && entries.dirs.map((d) => (
-            <div key={d} className="dir-browser-item dir-browser-dir" onClick={() => setDirPath(`${dirPath}/${d}`.replace(/\/+/g, '/'))}>
-              &#128193; {d}
-            </div>
-          ))}
-          {!loading && !error && entries.files.map((f) => (
-            <div key={f} className="dir-browser-item dir-browser-file">
-              &#128196; {f}
-            </div>
-          ))}
-          {!loading && !error && entries.dirs.length === 0 && entries.files.length === 0 && (
-            <div className="dir-browser-empty">空目录</div>
-          )}
-        </div>
-        <div className="dir-browser-footer">
-          <button className="btn btn-secondary" onClick={onClose}>取消</button>
-          <button className="btn btn-primary" onClick={() => { onSelect(dirPath); onClose(); }}>选择此目录</button>
-        </div>
-      </ResizableModal>
-    </div>
-  );
-}
 
 export function SettingsModal({ onClose }: SettingsModalProps) {
   const config = useChatStore((s) => s.config);

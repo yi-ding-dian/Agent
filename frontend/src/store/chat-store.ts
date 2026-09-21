@@ -5,6 +5,7 @@ import type { ConfigData } from '../types/api';
 import { fetchSSE, StreamInterruptedError } from '../services/sse-client';
 import { getLlmOverrides, apiUrl, isElectron } from '../services/api-config';
 import { getWSClient, type WSStatus } from '../services/ws-client';
+import { pushRecentWorkDir } from '../services/recent-dirs';
 import { confirmDialog } from './confirm-dialog';
 import * as api from '../services/api';
 
@@ -74,7 +75,7 @@ interface ChatStore {
   executePlan: () => Promise<void>;
   clearError: () => void;
   loadSessions: () => Promise<void>;
-  createNewSession: () => Promise<void>;
+  createNewSession: (opts?: { workDir?: string; mode?: AgentMode }) => Promise<void>;
   switchSession: (id: string) => Promise<void>;
   renameSession: (id: string, name: string) => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
@@ -557,18 +558,34 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     await api.updateConfig(config);
     set({ config });
   },
+  /**
+   * 切换**当前会话**的工作目录（保留对话历史）。
+   *
+   * 与全局配置无关：全局 config.work_dir 自会话级改造后只是「新会话的默认值」。
+   * 后端会因工具闭包捕获了 workDir 而重建该会话的 service（消息原样保留）；
+   * 会话正在执行时后端返回 409，这里把原因透传出来，不静默失败。
+   */
   switchWorkDir: async (dirPath) => {
-    const { config } = get();
-    if (!config) return;
-    const newConfig = { ...config, work_dir: dirPath };
+    const sid = get().activeSessionId;
+    if (!sid) {
+      // 空态（还没建会话）拖入/选中目录：新建一个挂在该目录下的会话
+      await get().createNewSession({ workDir: dirPath, mode: 'agent' });
+      pushRecentWorkDir(dirPath);
+      return;
+    }
     try {
-      if (isElectron()) {
-        await window.myagent!.setAgentConfig(newConfig);
-      } else {
-        await api.updateConfig(newConfig);
-      }
-    } catch { /* ignore */ }
-    set({ config: newConfig, directoryNotice: dirPath });
+      const info = await api.updateSession(sid, { workDir: dirPath });
+      set((s) => ({
+        sessions: s.sessions.map((x) =>
+          x.id === sid ? { ...x, work_dir: info?.work_dir ?? dirPath } : x,
+        ),
+        directoryNotice: dirPath,
+      }));
+      pushRecentWorkDir(dirPath);
+    } catch (err: any) {
+      // 409「会话正在执行中，请先停止」/ 400「目录不存在」都由 updateSession 透传中文原因
+      set({ error: err?.message || '切换工作目录失败' });
+    }
   },
   clearDirectoryNotice: () => set({ directoryNotice: null }),
   loadSessions: async () => {
@@ -584,13 +601,17 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       if (serverRunning.length > 0) startRunningSync();
     } catch { /* ignore */ }
   },
-  createNewSession: async () => {
+  createNewSession: async (opts) => {
     try {
-      const { mode } = get();
+      const mode = opts?.mode ?? get().mode;
       // 携带当前选中模型配置（getLlmOverrides 与 sendMessage 注入 modelOverrides 同源）：
       // 新会话创建时即应用当前默认模型，避免"建会话用 Qwen、发消息想用 DeepSeek 不生效"
       const llmOverrides = getLlmOverrides();
-      const session = await api.createSession(undefined, mode, llmOverrides);
+      const session = await api.createSession({
+        mode,
+        workDir: opts?.workDir,
+        llmOverrides,
+      });
       // 必须重置会话级状态：isProcessing 若沿用上一个会话（它可能正在跑），
       // 新会话的输入框会错误显示「AI 正在回复…」；error 同理会把旧会话的报错带过来
       set((s) => ({
@@ -631,6 +652,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         scrolledAway: false,
         flyRequest: null,
         needsRebuild: false,
+        // 目录提示条属于「上一个会话刚切过目录」的瞬时反馈，切走即清，避免串台
+        directoryNotice: null,
       });
       return;
     }
@@ -646,6 +669,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         scrolledAway: false,
         agents: rebuildAgentsFromMessages(apiMessagesToChatMessages(data.messages || [])),
         flyRequest: null,
+        directoryNotice: null,
         // 切到并未在执行的会话：清掉处理中状态 —— 原先不重置，会让「停止」按钮
         // 跟着上一个会话的状态泄漏过来
         isProcessing: false,

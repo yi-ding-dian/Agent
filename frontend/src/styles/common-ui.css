@@ -409,6 +409,47 @@
   border-radius: var(--radius-lg);
 }
 
+/* 页面级调用（如 Header 的路径标签）：改为视口定位。
+   上面那套 absolute 依赖父容器的定位上下文，挂在 Header 下会相对初始包含块定位 ——
+   表现为随页面滚动、且被 .modal-overlay 的 z-index:1000 压住。 */
+.dir-browser-overlay-fixed {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  border-radius: 0;
+  backdrop-filter: blur(2px);
+}
+
+/* 「最近使用」区：常在同一批项目目录间来回切，放最上面省去逐级点进去 */
+.dir-browser-recent {
+  border-bottom: 1px solid var(--border);
+  padding: 8px 12px;
+  max-height: 140px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.dir-browser-recent-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.dir-browser-recent-item {
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dir-browser-recent-item:hover {
+  background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+}
+
 .dir-browser-header {
   position: relative;
   display: flex;

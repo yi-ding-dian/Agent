@@ -31,17 +31,21 @@ export async function listSessions() {
   return res.json();
 }
 
-export async function createSession(
-  name?: string,
-  mode?: string,
-  llmOverrides?: { id?: string; baseUrl?: string; apiKey?: string; thinkingLevel?: string },
-) {
+export async function createSession(opts: {
+  name?: string;
+  mode?: string;
+  /** 会话级工作目录；不传 = 跟随全局默认 */
+  workDir?: string;
+  llmOverrides?: { id?: string; baseUrl?: string; apiKey?: string; thinkingLevel?: string };
+} = {}) {
+  const { name, mode, workDir, llmOverrides } = opts;
   const res = await fetch(apiUrl('/api/sessions'), {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({
       name: name || null,
       mode,
+      ...(workDir ? { workDir } : {}),
       // 携带当前选中模型配置（与 sendMessage 注入的 modelOverrides 同源，来自 getLlmOverrides），
       // 使新会话创建时即应用当前默认模型；未选中任何模型时不带 overrides，
       // 由后端使用用户全局默认（data/global-default-model.json），两者皆无则后端返回 400
@@ -84,13 +88,18 @@ export async function getSession(id: string) {
   return res.json();
 }
 
-export async function updateSession(id: string, data: { name?: string }) {
+export async function updateSession(id: string, data: { name?: string; workDir?: string | null }) {
   const res = await fetch(apiUrl(`/api/sessions/${id}`), {
     method: 'PUT',
     headers: authHeaders(),
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error('更新会话失败');
+  if (!res.ok) {
+    // 透传后端中文原因：切目录失败可能是 409「会话正在执行中，请先停止」或
+    // 400「目录不存在/没有权限」—— 吞掉 body 只抛「更新会话失败」会让用户无从判断
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error || `更新会话失败（HTTP ${res.status}）`);
+  }
   return res.json();
 }
 

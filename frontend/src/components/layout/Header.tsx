@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useChatStore } from '../../store/chat-store';
 import { SettingsModal } from './SettingsModal';
+import { WorkDirLabel } from './WorkDirLabel';
 import {
   getTheme,
   setTheme,
@@ -54,6 +55,8 @@ export function Header() {
               />
             ))}
           </div>
+          {/* 当前会话的工作目录：点击切换（拖拽也能切，两条路径汇入同一个 switchWorkDir） */}
+          <WorkDirLabel />
         </div>
         <div className="header-right">
           <button

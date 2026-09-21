@@ -81,28 +81,15 @@ export function MessageList() {
     if (window.myagent) {
       try {
         const dirPath = await window.myagent.getDropDirPath(file);
+        // 拖入目录 = 切「当前会话」的工作目录，消息历史原样保留。
+        // 原先这里是「有历史就 createNewSession」，那是全局 workDir 时代的权宜 ——
+        // 会话级之后没必要另起会话，且用户明确要求保留历史。
+        // 反馈由 switchWorkDir 里的 directoryNotice 横幅承担，不再往消息流里塞 system 消息
+        // （那种前端内存消息会在下次 persistMessages 时被顺带写进 DB）。
         await switchWorkDir(dirPath);
 
-        // 拖入目录 → 自动切换到 Agent 模式
-        const store = useChatStore.getState();
-        const hadMessages = store.messages.length > 0;
-        store.setMode('agent');
-
-        if (hadMessages) {
-          await store.createNewSession();
-        }
-
-        const hint = hadMessages
-          ? `已切换至 Agent 模式并开启新对话，工作目录：${dirPath}`
-          : `已切换至 Agent 模式，工作目录：${dirPath}`;
-        useChatStore.setState((s) => ({
-          messages: [...s.messages, {
-            id: 'drop_' + Date.now(),
-            role: 'system',
-            content: hint,
-            timestamp: Date.now(),
-          }],
-        }));
+        // 拖目录的人意图是「在这个目录里干活」，顺带切到 Agent 模式
+        useChatStore.getState().setMode('agent');
       } catch {
         // ignore
       }
