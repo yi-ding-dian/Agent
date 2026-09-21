@@ -14,10 +14,16 @@
  *   agent_end，事件流完整结束。
  * - 超时：整体 setTimeout(120s) → agent.abort()；单次 LLM 调用另有 streamFn 内的
  *   llmTimeoutMs 超时（与主代理一致）。主代理 run 的 abort signal 也会链到子代理。
- * - 并发锁：工具按会话实例化（SessionManager.createSession 每次 createCustomTools
- *   生成新工具实例），用实例闭包变量 busy 即天然按会话隔离；同会话并发调用抛错。
+ * - 并发上限：工具按会话实例化（SessionManager.createSession 每次 createCustomTools
+ *   生成新工具实例），用实例闭包变量 running 即天然按会话隔离；同会话并发数超过
+ *   maxConcurrent（默认 5）才拒绝。
+ *   注意（2026-09-21 修复）：原实现是二元 busy 锁，与 pi-agent-core 默认的
+ *   toolExecution=parallel 直接冲突 —— 主代理在一个 turn 内并行调用多个 subagent
+ *   是正常用法（本工具 description 亦鼓励并行），同一 turn 的多个 execute 经
+ *   Promise.all 并发进入，且 busy=true 发生在首个 await 之前，故第二个必然撞锁失败。
+ *   现改为计数上限：允许真并行，仅防模型失控刷出大量子代理。
  * - 错误传播：子代理内部错误不吞掉——结果 details 带 isError/error 标记，content 文本
- *   同时包含错误信息；锁冲突直接抛异常（agent-loop 自动转为 isError 的 toolResult）。
+ *   同时包含错误信息；超并发上限直接抛异常（agent-loop 自动转为 isError 的 toolResult）。
  */
 
 import { Agent } from '@earendil-works/pi-agent-core';
@@ -113,6 +119,7 @@ export interface SubagentEvent {
 const SUBAGENT_TOOL_NAME = 'subagent';
 const DEFAULT_MAX_TURNS = 8; // 最大轮数（LLM 调用次数，默认值）
 const DEFAULT_TIMEOUT_MS = 120_000; // 整体超时（默认值）
+const DEFAULT_MAX_CONCURRENT = 5; // 同会话并发子代理数上限（默认值）
 const ARGS_SUMMARY_MAX_LEN = 200;
 const TEXT_DELTA_THROTTLE_MS = 100; // text_delta 节流间隔：只推累积文本，避免高频微 delta 刷屏（内容完整推送不截断）
 const THINKING_DELTA_THROTTLE_MS = 100; // thinking_delta 节流间隔（同 text_delta，累积推送）
@@ -274,6 +281,8 @@ export interface CreateSubagentToolOptions {
   maxTurns?: number;
   /** 整体超时毫秒数（默认 120000） */
   timeoutMs?: number;
+  /** 同会话并发子代理数上限（默认 5）；并行派发是正常用法，此项仅防失控 */
+  maxConcurrent?: number;
   /** 所属会话 id：用于「停止该会话下全部子代理」。不传则该子代理只支持按 agentId 单停 */
   sessionId?: string;
 }
@@ -283,9 +292,10 @@ export function createSubagentTool(
   options: CreateSubagentToolOptions = {},
 ): AgentTool<typeof SubagentParams, SubagentDetails> {
 
-  // 并发锁：工具按会话实例化，实例闭包变量即按会话隔离；
-  // 同一实例（同一会话）执行中再次调用会报错，不同会话互不影响。
-  let busy = false;
+  // 并发计数：工具按会话实例化，实例闭包变量即按会话隔离；不同会话互不影响。
+  // 同一会话允许并行运行多个子代理（主代理在一个 turn 内派多个是正常用法，见文件头），
+  // 仅当并发数达到 maxConcurrent 时拒绝。
+  let running = 0;
 
   return {
     name: SUBAGENT_TOOL_NAME,
@@ -301,11 +311,17 @@ export function createSubagentTool(
       signal?: AbortSignal,
       onUpdate?: AgentToolUpdateCallback<SubagentDetails>,
     ): Promise<AgentToolResult<SubagentDetails>> {
-      // 锁：同一会话同时只允许一个 subagent 执行
-      if (busy) {
-        throw new Error('已有子代理在执行，请等待完成');
+      // 并发上限：同一会话并行的子代理数。getAdvancedConfig 为同步读取（无 await），
+      // 故「检查 + 自增」之间不会让出事件循环，并发进入的多个 execute 不会同时通过。
+      const subagentCfg = getAdvancedConfig().subagent;
+      const maxConcurrent =
+        options.maxConcurrent ?? subagentCfg.maxConcurrent ?? DEFAULT_MAX_CONCURRENT;
+      if (running >= maxConcurrent) {
+        throw new Error(
+          `子代理并发数已达上限（${maxConcurrent}），请等待部分子代理完成后再派新的子代理`,
+        );
       }
-      busy = true;
+      running += 1;
       try {
         // ─── 实时汇报：通过工具 onUpdate → agent-loop tool_execution_update →
         // SSE/WS tool_update(partialResult.details.subagentEvent) 推送子代理内部过程。
@@ -374,9 +390,8 @@ export function createSubagentTool(
             }, THINKING_DELTA_THROTTLE_MS);
           }
         };
-        // 每次执行时读取配置（advanced-config.json 的 subagent 段，可运行时调整），
-        // options 显式传入时优先于配置，配置优先于内置默认常量
-        const subagentCfg = getAdvancedConfig().subagent;
+        // 轮数 / 超时取自本次 execute 开头读取的配置（advanced-config.json 的 subagent 段，
+        // 可运行时调整）；options 显式传入时优先于配置，配置优先于内置默认常量
         const maxTurns = options.maxTurns ?? subagentCfg.maxTurns ?? DEFAULT_MAX_TURNS;
         const timeoutMs = options.timeoutMs ?? subagentCfg.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
@@ -544,7 +559,7 @@ export function createSubagentTool(
           },
         };
       } finally {
-        busy = false;
+        running -= 1;
       }
     },
   };

@@ -33,7 +33,7 @@ const DEFAULT_ADVANCED: AdvancedConfig = {
     minTurns: 4,
     headMessages: 2,
   },
-  subagent: { maxTurns: 50, timeoutMs: 1800000 },
+  subagent: { maxTurns: 50, timeoutMs: 1800000, maxConcurrent: 5 },
   memory: { maxEntries: 500, maxNoteLength: 2000 },
   commandBlacklist: ['sudo', 'mkfs', 'dd', 'rm -rf /', 'chmod 777', 'mkfs.ext4'],
   search: { timeoutMs: 15000, maxResults: 8 },
@@ -1265,6 +1265,17 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     onChange={(e) => setAdvNested('subagent', 'timeoutMs', (parseInt(e.target.value) || 1800) * 1000)}
                   />
                   <div className="settings-field-hint">子代理整体超时（秒），1-3600，超时自动中止并返回已有结果</div>
+                </div>
+                <div className="form-group">
+                  <label>最大并发数（{adv.subagent.maxConcurrent} 个）</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={adv.subagent.maxConcurrent}
+                    onChange={(e) => setAdvNested('subagent', 'maxConcurrent', parseInt(e.target.value) || 5)}
+                  />
+                  <div className="settings-field-hint">同一会话同时运行的子代理数上限，1-20。主代理一次派多个子代理会并行执行，此项仅防失控</div>
                 </div>
               </div>
 

@@ -48,6 +48,8 @@ export interface AdvancedConfig {
     maxTurns: number;
     /** 子代理整体超时毫秒 */
     timeoutMs: number;
+    /** 同一会话并发子代理数上限（并行派发是正常用法，此项仅防失控） */
+    maxConcurrent: number;
   };
   memory: {
     /** 记忆最大条目数 */

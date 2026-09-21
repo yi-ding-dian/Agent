@@ -31,10 +31,16 @@ export interface CompactionConfig {
 }
 
 export interface SubagentConfig {
-  /** 子代理最大轮数（LLM 调用次数），范围 1-50 */
+  /** 子代理最大轮数（LLM 调用次数），范围 1-1000 */
   maxTurns: number;
   /** 子代理整体超时（毫秒），范围 1000-600000 */
   timeoutMs: number;
+  /**
+   * 同一会话同时可运行的子代理数上限，范围 1-20。
+   * 主代理在一个 turn 内并行调用多个 subagent 是正常用法（pi-agent-core 默认
+   * toolExecution=parallel），本项只用于防止模型失控刷出大量子代理，而非禁止并行。
+   */
+  maxConcurrent: number;
 }
 
 export interface MemoryConfig {
@@ -72,7 +78,7 @@ const DEFAULTS: AdvancedConfig = {
     minTurns: 4,
     headMessages: 2,
   },
-  subagent: { maxTurns: 50, timeoutMs: 1_800_000 }, // 用户偏好：轮数默认 50（1-1000），超时默认 1800 秒（1-3600）
+  subagent: { maxTurns: 50, timeoutMs: 1_800_000, maxConcurrent: 5 }, // 用户偏好：轮数默认 50（1-1000），超时默认 1800 秒（1-3600）；并发默认 5
   memory: { maxEntries: 500, maxNoteLength: 2000 },
   commandBlacklist: ['sudo', 'mkfs', 'dd', 'rm -rf /', 'chmod 777', 'mkfs.ext4'],
   search: { timeoutMs: 15_000, maxResults: 8 },
@@ -89,6 +95,7 @@ const BOUNDS: Record<string, [number, number]> = {
   headMessages: [1, 20],
   maxTurns: [1, 1_000],
   timeoutMs: [1_000, 3_600_000],
+  maxConcurrent: [1, 20],
   maxEntries: [50, 5_000],
   maxNoteLength: [100, 10_000],
   maxResults: [1, 20],
@@ -253,6 +260,11 @@ export function updateAdvancedConfig(partial: Record<string, unknown>): {
         const err = validateNestedField(s.timeoutMs, 'timeoutMs', '子代理超时时间');
         if (err) errors.push(err);
         else next.subagent.timeoutMs = s.timeoutMs as number;
+      }
+      if (s.maxConcurrent !== undefined) {
+        const err = validateNestedField(s.maxConcurrent, 'maxConcurrent', '子代理最大并发数');
+        if (err) errors.push(err);
+        else next.subagent.maxConcurrent = s.maxConcurrent as number;
       }
     }
   }
