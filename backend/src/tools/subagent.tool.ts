@@ -1,7 +1,7 @@
 /**
  * subagent 子代理工具
  *
- * 主 Agent 调用 subagent(task, tools?) 时，后端创建一个独立的子 Agent 执行该任务，
+ * 主 Agent 调用 subagent(task) 时，后端创建一个独立的子 Agent 执行该任务，
  * 子代理的最终回复作为工具结果返回给主 Agent。主 Agent 可多次调用 subagent 分解并行任务。
  *
  * 设计决策（与 agent-factory.ts 的关系）：
@@ -22,6 +22,12 @@
  *   是正常用法（本工具 description 亦鼓励并行），同一 turn 的多个 execute 经
  *   Promise.all 并发进入，且 busy=true 发生在首个 await 之前，故第二个必然撞锁失败。
  *   现改为计数上限：允许真并行，仅防模型失控刷出大量子代理。
+ * - 工具集（2026-09-21 改）：子代理始终拿到与主 Agent 一致的全量工具池（仅排除 subagent
+ *   自身防无限递归），**不开放给模型指定**。参考 Claude Code：其 Agent 工具参数里根本没有
+ *   tools 字段，工具集由定义时静态决定，模型运行时无权变更权限边界 —— 无权也就不会传错。
+ *   背景：原参数 tools?: string[] 语义是"省略即全量"，但模型会按常见框架惯例传 ["all"]
+ *   表示"全部工具"，该值被当成工具名去池里找 → 工具池为空 → 子代理 0s 秒退
+ *   （会话 53a4d5af 派两子代理写散文，前两次全失败，靠模型自纠重试才成功）。
  * - 错误传播：子代理内部错误不吞掉——结果 details 带 isError/error 标记，content 文本
  *   同时包含错误信息；超并发上限直接抛异常（agent-loop 自动转为 isError 的 toolResult）。
  */
@@ -47,11 +53,10 @@ import { createCustomTools } from './index.js';
 
 // ─── 参数 Schema（TypeBox，与现有工具一致）──────────────────────
 
+// 刻意不提供 tools 参数：工具集不开放给模型指定（理由见文件头"工具集"）。参数越少，
+// 模型越没有传错的余地 —— 曾经的 tools?: string[] 就因模型传 ["all"] 而让子代理秒退。
 const SubagentParams = Type.Object({
   task: Type.String({ description: '子代理要完成的任务描述（会写入子代理系统提示词）' }),
-  tools: Type.Optional(
-    Type.Array(Type.String(), { description: '允许子代理使用的工具名列表，默认使用全部工具' }),
-  ),
 });
 
 export type SubagentParams = Static<typeof SubagentParams>;
@@ -275,7 +280,7 @@ export function abortSessionSubAgents(sessionId: string): number {
 export interface CreateSubagentToolOptions {
   /** 子代理模型，默认与主代理相同（agent 模式的模型配置） */
   model?: Model<any>;
-  /** 工具池（默认 createCustomTools(workDir) 全量工具），按 tools 参数过滤 */
+  /** 工具池（默认 createCustomTools(workDir) 全量工具；子代理固定用全部，不做按名过滤） */
   toolsPool?: AgentTool<any>[];
   /** 最大轮数（默认 8） */
   maxTurns?: number;
@@ -398,18 +403,11 @@ export function createSubagentTool(
         // ① 模型：默认与主代理一致（agent 模式配置），可用 createSubagentTool 的 model 覆盖
         const model = options.model ?? createQwenModel(getAgentModelConfig());
 
-        // ② 工具集：从项目工具池按 tools 参数过滤；子代理永远不包含 subagent 自身（防无限递归）
+        // ② 工具集：全量工具池（与主 Agent 一致），仅排除 subagent 自身（防无限递归）
         const pool = options.toolsPool ?? createCustomTools(workDir);
-        const allowedNames = params.tools
-          ? new Set(params.tools)
-          : new Set(pool.map((t) => t.name));
-        const tools = pool.filter(
-          (t) => t.name !== SUBAGENT_TOOL_NAME && allowedNames.has(t.name),
-        );
+        const tools = pool.filter((t) => t.name !== SUBAGENT_TOOL_NAME);
         if (tools.length === 0) {
-          throw new Error(
-            '子代理没有可用工具（指定的工具不存在、已被过滤或只有 subagent 自身）',
-          );
+          throw new Error('子代理没有可用工具（工具池为空，或只有 subagent 自身）');
         }
 
         // ③ 创建子代理（提示词为子代理专用，task 注入）
