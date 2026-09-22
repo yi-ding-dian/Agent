@@ -97,6 +97,25 @@ export async function queryKnowledgeBase(link, query, topK) {
   }
 }
 
+/**
+ * 去掉知识库图片地址上的 token 参数。
+ * token 由后端 /api/ext 代理转发时按配置补最新值（见 backend/src/routes/ext-proxy.routes.ts），
+ * 不必也不该落到对话记录里；且模型本就不愿外露密钥，硬要求它保留 token 反而不稳。
+ */
+function stripImageToken(text) {
+  return text.replace(/\/api\/ext\/[^\s)"'\\]*/g, (match) => {
+    try {
+      const u = new URL(match, "http://placeholder");
+      if (!u.searchParams.has("token")) return match;
+      u.searchParams.delete("token");
+      const qs = u.searchParams.toString();
+      return u.pathname + (qs ? `?${qs}` : "");
+    } catch {
+      return match;
+    }
+  });
+}
+
 /** 格式化输出：回答 + 引用来源 */
 function formatResult(answer, sources) {
   let text = answer || "";
@@ -108,6 +127,11 @@ function formatResult(answer, sources) {
       const snip = (s.text || "").slice(0, SNIPPET_MAX_LEN);
       text += `${i + 1}. ${name}\n   ${snip}\n`;
     });
+  }
+  text = stripImageToken(text);
+  // 含图片时前置一句：模型转述时容易把 ![](地址) 降级成「图片链接：xxx」纯文本，前端就渲染不出图
+  if (/!\[[^\]]*\]\(/.test(text)) {
+    text = `【本条含图片：请原样保留 Markdown 图片语法 ![](地址)，不要把图片改写成"图片链接：xxx"之类的纯文本，也不要省略，否则用户看不到图】\n\n${text}`;
   }
   return text;
 }
