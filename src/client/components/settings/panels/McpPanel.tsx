@@ -132,7 +132,11 @@ export function McpPanel() {
           <button className="btn btn-secondary" onClick={() => setShowMcpModal(true)} style={{ marginBottom: 12 }}>
             + 新增外部 MCP 服务
           </button>
-          <ResizableModal width={480} onEsc={() => setShowMcpModal(false)}>
+          {/* 新增入口（弹窗）—— 弹出条件 + 遮罩层缺一不可：
+              条件丢失会变成无条件渲染（弹窗常驻且关不掉，setShowMcpModal(null) 无对应判断） */}
+          {showMcpModal && (
+            <div className="modal-overlay">
+              <ResizableModal width={480} onEsc={() => setShowMcpModal(false)}>
             <div className="modal-header">
               <h2>新增外部 MCP 服务</h2>
               <button className="modal-close-btn" onClick={() => setShowMcpModal(false)}>&#10005;</button>
@@ -186,7 +190,9 @@ export function McpPanel() {
                 {mcpSaving ? '保存中...' : '添加'}
               </button>
             </div>
-          </ResizableModal>
+              </ResizableModal>
+            </div>
+          )}
     </>
   );
 }
