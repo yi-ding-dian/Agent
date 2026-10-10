@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useChatStore } from '../../store/chat-store';
-import { apiUrl } from '../../services/api-config';
-import type { ChatMessage } from '../../types/chat';
+import { useChatStore } from '../../../store/chat-store';
+import { apiUrl } from '../../../services/api-config';
+import type { ChatMessage } from '../../../types/chat';
 
 interface TokenUsage {
   estimatedTokens: number;

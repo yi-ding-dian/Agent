@@ -3,13 +3,12 @@ import { useChatStore } from '../../store/chat-store';
 import { isElectron } from '../../services/api-config';
 import { MessageList } from './MessageList';
 import { QuestionPanel } from './QuestionPanel';
-import { InputBar } from '../input/InputBar';
-import { Header } from '../layout/Header';
-import { ConfirmationDialog } from '../agent/ConfirmationDialog';
+import { InputBar } from './input/InputBar';
+import { ConfirmationDialog } from './agent/ConfirmationDialog';
 import { PlanCard } from './PlanCard';
-import { ExtensionUIDialog } from '../agent/ExtensionUIDialog';
-import { TokenBar } from '../agent/TokenBar';
-import { QueueIndicator } from '../input/QueueIndicator';
+import { ExtensionUIDialog } from './agent/ExtensionUIDialog';
+import { TokenBar } from './agent/TokenBar';
+import { QueueIndicator } from './input/QueueIndicator';
 import { MagicFly } from './MagicFly';
 
 /** 判断拖放项是否包含目录（而非单纯的文件） */
@@ -215,7 +214,6 @@ export function ChatWindow() {
           {dragType === 'dir' ? '释放以切换工作目录' : '释放以添加附件'}
         </div>
       )}
-      <Header />
       {directoryNotice && (
         <div className="dir-notice">
           <span>当前工作目录已切换至 '{directoryNotice}'</span>

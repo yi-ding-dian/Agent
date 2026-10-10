@@ -1,4 +1,4 @@
-import { useChatStore } from '../../store/chat-store';
+import { useChatStore } from '../../../store/chat-store';
 
 export function ConfirmationDialog() {
   const pendingConfirmation = useChatStore((s) => s.pendingConfirmation);

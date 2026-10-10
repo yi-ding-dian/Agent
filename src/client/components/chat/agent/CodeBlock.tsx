@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useRef, useLayoutEffect } from 'react';
 import hljs from 'highlight.js';
-import { usePreviewStore } from '../../store/preview-store';
+import { usePreviewStore } from '../../../store/preview-store';
 
 interface CodeBlockProps {
   code: string;

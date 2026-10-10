@@ -2,9 +2,9 @@ import { useState, useCallback } from 'react';
 import type { ChatMessage } from '../../types/chat';
 import { MarkdownRenderer } from '../common/MarkdownRenderer';
 import { StreamingText } from './StreamingText';
-import { ToolCallGroup } from '../agent/ToolCallGroup';
+import { ToolCallGroup } from './agent/ToolCallGroup';
 import { LoadingSpinner } from '../common/LoadingSpinner';
-import { RegenerateButton } from '../agent/RegenerateButton';
+import { RegenerateButton } from './agent/RegenerateButton';
 import { useChatStore } from '../../store/chat-store';
 import { openImageOverlay } from '../../utils/image-overlay';
 

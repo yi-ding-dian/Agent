@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useChatStore } from '../../store/chat-store';
+import { useChatStore } from '../../../store/chat-store';
 
 /**
  * 模式选择器：点击按钮向上弹出菜单。

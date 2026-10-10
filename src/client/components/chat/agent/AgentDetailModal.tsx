@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { AgentInfo, ToolCallInfo } from '../../types/chat';
-import { MarkdownRenderer } from '../common/MarkdownRenderer';
-import { ResizableModal } from '../common/ResizableModal';
+import type { AgentInfo, ToolCallInfo } from '../../../types/chat';
+import { MarkdownRenderer } from '../../common/MarkdownRenderer';
+import { ResizableModal } from '../../common/ResizableModal';
 import { ToolCallGroup } from './ToolCallGroup';
-import { useChatStore } from '../../store/chat-store';
+import { useChatStore } from '../../../store/chat-store';
 
 interface AgentDetailModalProps {
   agent: AgentInfo;

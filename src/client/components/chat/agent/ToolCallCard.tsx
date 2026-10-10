@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { ToolCallInfo } from '../../types/chat';
+import type { ToolCallInfo } from '../../../types/chat';
 
 interface ToolCallCardProps {
   toolCall: ToolCallInfo;

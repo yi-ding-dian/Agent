@@ -1,4 +1,4 @@
-import type { ToolCallInfo } from '../../types/chat';
+import type { ToolCallInfo } from '../../../types/chat';
 import { CodeBlock } from './CodeBlock';
 
 interface ToolExecutionViewProps {

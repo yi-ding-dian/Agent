@@ -59,3 +59,13 @@ a:hover {
   overflow: hidden;
 }
 
+/* 主区（顶栏 + 对话区）：Header 从 ChatWindow（业务域）提到 AppLayout（壳）后新增的容器。
+   样式与 .chat-area 同构（flex column + flex:1 + min-width:0），故视觉不变。 */
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+

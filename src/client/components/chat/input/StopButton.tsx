@@ -1,4 +1,4 @@
-import { useChatStore } from '../../store/chat-store';
+import { useChatStore } from '../../../store/chat-store';
 
 export function StopButton() {
   const isProcessing = useChatStore(s => s.isProcessing);

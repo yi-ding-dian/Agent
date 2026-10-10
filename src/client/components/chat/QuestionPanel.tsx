@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useChatStore } from '../../store/chat-store';
-import { AgentDetailModal } from '../agent/AgentDetailModal';
+import { AgentDetailModal } from './agent/AgentDetailModal';
 import type { AgentInfo } from '../../types/chat';
 
 /**

@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { ToolCallInfo } from '../../types/chat';
-import { TOOL_LABELS, formatToolArgs, formatToolPayload, formatToolTime } from '../../utils/tool-display';
+import type { ToolCallInfo } from '../../../types/chat';
+import { TOOL_LABELS, formatToolArgs, formatToolPayload, formatToolTime } from '../../../utils/tool-display';
 
 interface ToolCallGroupProps {
   toolCalls: ToolCallInfo[];

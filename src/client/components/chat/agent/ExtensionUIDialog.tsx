@@ -1,5 +1,5 @@
-import type { ExtensionUIRequest } from '../../types/chat';
-import { useChatStore } from '../../store/chat-store';
+import type { ExtensionUIRequest } from '../../../types/chat';
+import { useChatStore } from '../../../store/chat-store';
 
 /**
  * 扩展 UI 交互组件

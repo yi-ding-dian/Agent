@@ -1,4 +1,4 @@
-import { useChatStore } from '../../store/chat-store';
+import { useChatStore } from '../../../store/chat-store';
 
 /**
  * 重新生成按钮

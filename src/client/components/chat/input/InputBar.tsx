@@ -1,16 +1,16 @@
 import { useState, useRef, useCallback, KeyboardEvent, useEffect, useMemo } from 'react';
-import { useChatStore } from '../../store/chat-store';
-import { toast } from '../../store/toast-store';
+import { useChatStore } from '../../../store/chat-store';
+import { toast } from '../../../store/toast-store';
 import { StopButton } from './StopButton';
 import { ModeMenu } from './ModeMenu';
-import type { ImageAttachment } from '../../types/chat';
-import * as api from '../../services/api';
+import type { ImageAttachment } from '../../../types/chat';
+import * as api from '../../../services/api';
 import {
   getModelPresets,
   getActivePresetName,
   setActivePresetName,
   type ModelPreset,
-} from '../../services/api-config';
+} from '../../../services/api-config';
 
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
 
