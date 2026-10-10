@@ -10,6 +10,10 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  /* min-height: 0 必不可少：Header 归位后 .chat-area 成了 .app-main（纵向 flex）的子项，
+     而纵向 flex 子项的默认 min-height:auto 会阻止收缩 —— 长对话会把本区域撑到内容高度，
+     进而顶破 .app-main，使顶栏/侧栏被 .app-layout 的 overflow:hidden 裁出视口。 */
+  min-height: 0;
 }
 
 .message-area-wrapper {
