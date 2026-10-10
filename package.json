@@ -14,6 +14,7 @@
     "build:server": "esbuild src/server/index.ts --bundle --format=esm --platform=node --packages=external --outfile=build/server-dist/index.js",
     "build:electron": "esbuild src/server/agent-engine/index.ts --bundle --outfile=build/dist/main/agent-engine.mjs --format=esm --platform=node --packages=external --target=node20",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.web.json && tsc -p tsconfig.main.json",
+    "check:boundaries": "node scripts/check-boundaries.mjs",
     "test": "node --import tsx --test test/server/unit/*.test.ts",
     "start": "node build/server-dist/index.js"
   },
