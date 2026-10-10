@@ -70,5 +70,8 @@ build/smoke/
 *.dmg
 *.exe
 mcp接入文档.md
-mcp接入文档.md
 开发指南.md
+
+# ── 工具产物（测试/调试产生，不入库）──────
+.news/
+.playwright-mcp/
