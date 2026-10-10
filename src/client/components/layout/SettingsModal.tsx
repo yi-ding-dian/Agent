@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useChatStore } from '../../store/chat-store';
-import { useAuthStore } from '../../store/auth-store';
 import { toast } from '../../store/toast-store';
 import { confirmDialog } from '../../store/confirm-dialog';
 import { ResizableModal } from '../common/ResizableModal';
 import { DirBrowser } from '../common/DirBrowser';
-import type { AdvancedConfig, ConfigData, ExtensionInfo, ExternalServiceEntry, McpServerConfig, ToolPermissionValue } from '../../types/api';
+import type { AdvancedConfig, ConfigData, McpServerConfig, ToolPermissionValue } from '../../types/api';
 import * as api from '../../services/api';
 import { isElectron } from '../../services/api-config';
 // 共享默认值（真实值导入，非类型擦除）—— 与后端 advanced-config.ts 是同一份
@@ -22,6 +21,13 @@ import {
 } from '../../services/api-config';
 // 设置表单基础设施（2026-10 架构改造：form/保存逻辑由本文件抽出，见 settings/shared/）
 import { SettingsFormProvider, useSettingsForm } from '../settings/shared/settings-form';
+// 已拆出的域组件（2026-10 架构改造：逐个从本文件搬出）
+import { PermissionsPanel } from '../settings/panels/PermissionsPanel';
+import { AgentLimitPanel } from '../settings/panels/AgentLimitPanel';
+import { MemoryPanel } from '../settings/panels/MemoryPanel';
+import { ExtensionsPanel } from '../settings/panels/ExtensionsPanel';
+import { UserPanel } from '../settings/panels/UserPanel';
+import { ExternalPanel } from '../settings/panels/ExternalPanel';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -50,54 +56,30 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
  * 故上提到 shared 层而不是留在壳里（2026-10 架构改造）。
  */
 function SettingsShell({ onClose }: SettingsModalProps) {
-  const { form, setForm, setField, setToolPermission, setAdvanced, setAdvancedNested, permissionTools, handleRateLimitBlur, save, saving } = useSettingsForm();
+  const { form, setForm, setField, setToolPermission, setAdvanced, setAdvancedNested, permissionTools, handleRateLimitBlur, save, saving, footer } = useSettingsForm();
 
   const [tab, setTab] = useState<SettingsTab>('common');
   const [browsing, setBrowsing] = useState(false);
-  // 跨会话记忆（第 6 个 tab：记忆管理）
-  const [memoryText, setMemoryText] = useState('');
-  const [memorySaving, setMemorySaving] = useState(false);
-  const [memoryDistilling, setMemoryDistilling] = useState(false);
+  // 跨会话记忆的 state / 加载 / 保存已随「记忆管理」域迁至 settings/panels/MemoryPanel.tsx
   // MCP 外部 server（第 9 个 tab：MCP 服务）
   const [mcpServers, setMcpServers] = useState<McpServerConfig[]>([]);
   const [mcpForm, setMcpForm] = useState({ name: '', command: '', args: '', description: '' });
   const [mcpSaving, setMcpSaving] = useState(false);
   const [showMcpModal, setShowMcpModal] = useState(false);
-  // 扩展（第 10 个 tab：扩展管理）
-  const [extensions, setExtensions] = useState<ExtensionInfo[]>([]);
-  const [extensionsLoading, setExtensionsLoading] = useState(false);
-  // 外部服务（第 11 个 tab：知识库查询链接）
-  const [extServices, setExtServices] = useState<ExternalServiceEntry[]>([]);
-  // null = 空闲；'kb' / 'filesys' / 自定义条目 id = 对应链接正在测试
-  const [extTesting, setExtTesting] = useState<string | null>(null);
-  const [extSaving, setExtSaving] = useState(false);
-  // 外部服务新增/编辑弹窗
-  const [showServiceModal, setShowServiceModal] = useState(false);
-  const [newService, setNewService] = useState({ title: '', url: '', description: '' });
-  /** null = 新增模式；否则为编辑的外部队列索引 */
-  const [editingServiceIndex, setEditingServiceIndex] = useState<number | null>(null);
+  // 扩展列表的 state / 加载 / 启停已随「扩展」域迁至 settings/panels/ExtensionsPanel.tsx
+  // 外部服务的 state / 加载 / 增删改 / 弹窗已随「外部服务」域迁至 settings/panels/ExternalPanel.tsx
   // 模型预设（localStorage；选中项会同步 POST /api/global-model 持久化到服务端作为该用户的
   // 全局默认模型 —— 后端创建会话时 modelOverrides 与全局默认都无才报错）
   const [presets, setPresets] = useState<ModelPreset[]>(() => getModelPresets());
   const [activePreset, setActivePreset] = useState<string | null>(() => getActivePresetName());
   const [editingPreset, setEditingPreset] = useState<{ index: number | 'new'; name: string; baseUrl: string; model: string; apiKey: string; maxTokens: number } | null>(null);
   const [presetTesting, setPresetTesting] = useState(false);
-  const [avatar, setAvatar] = useState<string>(() => localStorage.getItem('myagent_avatar') || '');
-  const user = useAuthStore((s) => s.user);
+  // 账户域（头像 / 用户信息）的 state 已迁至 settings/panels/UserPanel.tsx
   // 服务端全局默认模型（模型设置选中项同步而来；常规 tab「当前模型」展示用）
   const [globalModel, setGlobalModel] = useState<{ id: string; baseUrl: string; apiKey: string } | null>(null);
 
   // RATE_FIELDS / handleRateLimitBlur / 服务端配置同步 / 思考级别归一化
   // 均已移入 SettingsFormProvider（见 settings/shared/settings-form.tsx）
-
-  // 切换到记忆管理 tab 时加载当前记忆全文
-  useEffect(() => {
-    if (tab === 'memory') {
-      api.getMemory()
-        .then((d) => setMemoryText(d.content || ''))
-        .catch((e: any) => toast.error(e.message));
-    }
-  }, [tab]);
 
   // 切换到 MCP 服务 tab 时加载 server 列表
   useEffect(() => {
@@ -108,25 +90,7 @@ function SettingsShell({ onClose }: SettingsModalProps) {
     }
   }, [tab]);
 
-  // 切换到扩展 tab 时加载扩展列表
-  useEffect(() => {
-    if (tab === 'extensions') {
-      setExtensionsLoading(true);
-      api.listExtensions()
-        .then((list) => setExtensions(list))
-        .catch((e: any) => toast.error(e.message || '加载扩展列表失败'))
-        .finally(() => setExtensionsLoading(false));
-    }
-  }, [tab]);
-
   // 切换到外部服务 tab 时加载当前配置
-  useEffect(() => {
-    if (tab === 'external') {
-      api.getExternalService()
-        .then((d) => setExtServices(d.services || []))
-        .catch((e: any) => toast.error(e.message));
-    }
-  }, [tab]);
 
   /** 「浏览」工作目录：Electron 桌面端走系统目录选择对话框；Web 模式走定制目录浏览器 */
   const handleBrowse = async () => {
@@ -142,26 +106,9 @@ function SettingsShell({ onClose }: SettingsModalProps) {
   // handleToolPermissionChange / permissionTools 已移入 SettingsFormProvider
   // （工具权限域与壳共享同一份工具清单与权限 setter）
 
-  /** 底部统一保存：按当前 tab 分派各自的保存动作（位置统一，动作语义一致） */
-  const handleBottomSave = (): void => {
-    if (tab === 'memory') void handleSaveMemory();
-    else if (tab === 'advanced') void handleSaveAdvanced();
-    else if (tab === 'external') void handleExtSave();
-    else void save();
-  };
+  // 底部保存栏内容由各域通过 useSettingsForm().setFooter 声明，壳不再按 tab 分派
 
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { toast.error('头像图片不能超过 2MB'); return; }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      setAvatar(dataUrl);
-      localStorage.setItem('myagent_avatar', dataUrl);
-    };
-    reader.readAsDataURL(file);
-  };
+  // 头像更换已迁至 settings/panels/UserPanel.tsx
 
   // ─── 模型预设操作（即时写入 localStorage，并同步 POST /api/global-model 持久化到服务端） ───
 
@@ -308,51 +255,7 @@ function SettingsShell({ onClose }: SettingsModalProps) {
     if (editingPreset && editingPreset.index === index) setEditingPreset(null);
   };
 
-  // ─── 记忆管理（跨会话记忆） ───────────────────
-
-  const handleSaveMemory = async (content?: string) => {
-    const target = content !== undefined ? content : memoryText;
-    setMemorySaving(true);
-    try {
-      await api.saveMemory(target);
-      toast.success('记忆已保存，将在下次创建会话时注入');
-    } catch (e: any) {
-      toast.error(e.message);
-    } finally {
-      setMemorySaving(false);
-    }
-  };
-
-  const handleClearMemory = async () => {
-    const r = await confirmDialog.confirm({
-      title: '清空全部记忆',
-      message: '确定清空全部记忆吗？此操作不可撤销。',
-      danger: true,
-      confirmLabel: '清空',
-    });
-    if (r !== 'confirm') return;
-    setMemoryText('');
-    handleSaveMemory('');
-  };
-
-  const handleDistillMemory = async () => {
-    setMemoryDistilling(true);
-    try {
-      const r = await api.distillMemory();
-      if (r.success) {
-        toast.success(`蒸馏完成：${r.distilled} 条记忆 → ${r.result} 条精炼记忆`);
-        // 蒸馏成功后重新拉取全文刷新编辑器
-        const d = await api.getMemory();
-        setMemoryText(d.content || '');
-      } else {
-        toast.error(r.error || '记忆蒸馏失败');
-      }
-    } catch (e: any) {
-      toast.error(e.message);
-    } finally {
-      setMemoryDistilling(false);
-    }
-  };
+  // ─── 记忆管理已迁至 settings/panels/MemoryPanel.tsx ───────────────────
 
   // ─── MCP 外部 server（第 9 个 tab） ───────────────────
 
@@ -413,121 +316,9 @@ function SettingsShell({ onClose }: SettingsModalProps) {
     }
   };
 
-  // ─── 扩展（第 10 个 tab：启停管理） ───
+  // ─── 扩展（启停管理）已迁至 settings/panels/ExtensionsPanel.tsx ───
 
-  const handleExtensionToggle = async (ext: ExtensionInfo) => {
-    try {
-      const r = await api.toggleExtension(ext.name);
-      // 后端落盘后对新会话即时生效（运行中会话不热更新），本地刷新列表展示新状态
-      setExtensions((prev) => prev.map((e) => (e.name === ext.name ? { ...e, enabled: r.enabled } : e)));
-      toast.success(`已${r.enabled ? '启用' : '停用'}「${ext.name}」，新会话生效`);
-    } catch (e: any) {
-      toast.error(e.message || '切换失败');
-    }
-  };
-
-  // ─── 外部服务（可自定义查询链接列表，服务端 data/external-service-config.json） ───
-
-  const handleExtTest = async (s: ExternalServiceEntry) => {
-    if (!s.url.trim()) {
-      toast.error(`请先填写「${s.title}」的链接`);
-      return;
-    }
-    setExtTesting(s.id);
-    try {
-      const r = await api.testExternalService({ id: s.id, url: s.url.trim() });
-      if (r.ok) {
-        toast.success(`${s.title} 连接成功（${r.latencyMs}ms）`);
-      } else {
-        toast.error(`${s.title}：${r.error || '连接失败'}`);
-      }
-    } catch (e: any) {
-      toast.error(e.message);
-    } finally {
-      setExtTesting(null);
-    }
-  };
-
-  /** 删除外部服务（二次确认；返回是否真的删除）；供行内与编辑弹窗共用 */
-  const handleExtDelete = async (index: number): Promise<boolean> => {
-    const s = extServices[index];
-    if (!s) return false;
-    const r = await confirmDialog.confirm({
-      title: '删除外部服务',
-      message: `删除外部服务「${s.title}」？${s.id === 'kb' ? '（知识库查询将变为未配置）' : s.id === 'filesys' ? '（文件系统查询将变为未配置）' : ''}`,
-      danger: true,
-      confirmLabel: '删除',
-    });
-    if (r !== 'confirm') return false;
-    setExtServices((prev) => prev.filter((_, i) => i !== index));
-    toast.info(`已删除「${s.title}」`);
-    return true;
-  };
-
-  /** 关闭弹窗并重置编辑态 */
-  const handleCloseServiceModal = () => {
-    setShowServiceModal(false);
-    setEditingServiceIndex(null);
-    setNewService({ title: '', url: '', description: '' });
-  };
-
-  const handleOpenAddService = () => {
-    setEditingServiceIndex(null);
-    setNewService({ title: '', url: '', description: '' });
-    setShowServiceModal(true);
-  };
-
-  const handleOpenEditService = (index: number) => {
-    const s = extServices[index];
-    if (!s) return;
-    setEditingServiceIndex(index);
-    setNewService({ title: s.title, url: s.url, description: s.description });
-    setShowServiceModal(true);
-  };
-
-  /** 弹窗保存：编辑模式更新对应条目，新增模式追加（无 id 由后端分配） */
-  const handleSaveServiceModal = () => {
-    const title = newService.title.trim();
-    const url = newService.url.trim();
-    if (!title) {
-      toast.error('请填写服务标题');
-      return;
-    }
-    if (!url) {
-      toast.error('请填写服务链接');
-      return;
-    }
-    const description = newService.description.trim();
-    if (editingServiceIndex !== null) {
-      setExtServices((prev) => prev.map((s, i) => (i === editingServiceIndex ? { ...s, title, url, description } : s)));
-    } else {
-      // 新条目不带 id（后端保存时按标题匹配置内置 id 或分配 uuid）；临时 key 用时间戳前缀
-      setExtServices((prev) => [...prev, { id: `tmp-${Date.now()}`, title, url, description }]);
-    }
-    handleCloseServiceModal();
-  };
-
-  /** 编辑弹窗内删除：二次确认成功后关闭弹窗 */
-  const handleDeleteFromServiceModal = async () => {
-    if (editingServiceIndex === null) return;
-    const deleted = await handleExtDelete(editingServiceIndex);
-    if (deleted) handleCloseServiceModal();
-  };
-
-  const handleExtSave = async () => {
-    setExtSaving(true);
-    try {
-      // 临时 id（tmp-*）的新条目不发 id，由后端分配；保留后端返回的正式列表
-      const payload = { services: extServices.map((s) => ({ ...s, id: s.id.startsWith('tmp-') ? '' : s.id })) };
-      const saved = await api.saveExternalService(payload);
-      setExtServices(saved.services);
-      toast.success('外部服务配置已保存，立即生效');
-    } catch (e: any) {
-      toast.error(e.message || '保存失败');
-    } finally {
-      setExtSaving(false);
-    }
-  };
+  // ─── 外部服务（知识库查询链接）已迁至 settings/panels/ExternalPanel.tsx ───
 
   // ─── 高级设置（advanced-config：压缩/子代理/记忆/黑名单/搜索） ───
 
@@ -839,63 +630,7 @@ function SettingsShell({ onClose }: SettingsModalProps) {
             </>
           )}
 
-          {tab === 'agent' && (
-            <>
-              <div className="settings-section-title">Agent 限流（超过限制时 Agent 会自动阻断工具调用）</div>
-              <div className="settings-section-desc">
-                说明：限流由服务端实时执行（data/rate-limit-config.json），超过上限时 Agent 会自动阻断工具调用并提示（rate_limit_abort）。保存后立即生效。
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label>每分钟最多工具调用（10-50）</label>
-                  <input
-                    type="number"
-                    value={form.tool_rate_limit_per_minute}
-                    onChange={(e) => setField('tool_rate_limit_per_minute', parseInt(e.target.value) || 0)}
-                    onBlur={() => handleRateLimitBlur('tool_rate_limit_per_minute')}
-                    min={10}
-                    max={50}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>单轮最多工具调用（20-100）</label>
-                  <input
-                    type="number"
-                    value={form.agent_max_tool_calls_per_turn}
-                    onChange={(e) => setField('agent_max_tool_calls_per_turn', parseInt(e.target.value) || 0)}
-                    onBlur={() => handleRateLimitBlur('agent_max_tool_calls_per_turn')}
-                    min={20}
-                    max={100}
-                  />
-                </div>
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>连续错误上限（5-20）</label>
-                  <input
-                    type="number"
-                    value={form.agent_max_consecutive_errors}
-                    onChange={(e) => setField('agent_max_consecutive_errors', parseInt(e.target.value) || 0)}
-                    onBlur={() => handleRateLimitBlur('agent_max_consecutive_errors')}
-                    min={5}
-                    max={20}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>最大对话轮数（10-100）</label>
-                  <input
-                    type="number"
-                    value={form.agent_max_turns}
-                    onChange={(e) => setField('agent_max_turns', parseInt(e.target.value) || 0)}
-                    onBlur={() => handleRateLimitBlur('agent_max_turns')}
-                    min={10}
-                    max={100}
-                  />
-                </div>
-              </div>
-            </>
-          )}
+          {tab === 'agent' && <AgentLimitPanel />}
 
           {tab === 'presets' && (
             <>
@@ -1004,61 +739,9 @@ function SettingsShell({ onClose }: SettingsModalProps) {
             </div>
           )}
 
-          {tab === 'permissions' && (
-            <>
-              <div className="settings-section-desc">
-                控制每个工具的执行权限：允许=直接执行，询问=执行前弹窗确认，禁止=直接拒绝不执行。
-                服务端生效（data/tool-permissions.json），Electron 客户端不强制此配置。执行命令的绝对黑名单（sudo/mkfs/dd 等）始终生效，不受权限配置影响。
-              </div>
-              {permissionTools.map((name) => (
-                <div className="form-group" key={name}>
-                  <label>{TOOL_LABELS[name] || name}</label>
-                  <select
-                    value={form.tool_permissions?.[name] || 'allow'}
-                    onChange={(e) => setToolPermission(name, e.target.value as ToolPermissionValue)}
-                  >
-                    <option value="allow">允许</option>
-                    <option value="ask">询问</option>
-                    <option value="deny">禁止</option>
-                  </select>
-                </div>
-              ))}
-            </>
-          )}
+          {tab === 'permissions' && <PermissionsPanel />}
 
-          {tab === 'memory' && (
-            <>
-              <div className="settings-section-desc">
-                记忆会自动注入每次 Agent 对话（服务端会话，含 chat 模式），可在此查看/修改/清空。
-                对话中 Agent 可通过 remember 工具追加新记忆；Electron 客户端会话不注入记忆。
-              </div>
-              <div className="form-group">
-                <textarea
-                  value={memoryText}
-                  onChange={(e) => setMemoryText(e.target.value)}
-                  placeholder="暂无记忆内容"
-                  rows={14}
-                  style={{ fontFamily: 'monospace', whiteSpace: 'pre' }}
-                />
-              </div>
-              <div className="memory-actions">
-                <button
-                  className="btn btn-secondary"
-                  onClick={handleDistillMemory}
-                  disabled={memoryDistilling || memorySaving}
-                >
-                  {memoryDistilling ? '蒸馏中...' : '蒸馏记忆'}
-                </button>
-                <button className="btn btn-danger" onClick={handleClearMemory} disabled={memorySaving}>
-                  清空
-                </button>
-              </div>
-              <div className="settings-field-hint" style={{ marginTop: 4 }}>
-                把旧记忆交给 AI 提炼合并，保留关键信息、精简体积；建议记忆接近上限时使用。
-                蒸馏使用 DeepSeek（需配置 DEEPSEEK_API_KEY），失败不影响原记忆。
-              </div>
-            </>
-          )}
+          {tab === 'memory' && <MemoryPanel />}
 
           {tab === 'advanced' && (
             <>
@@ -1342,196 +1025,18 @@ function SettingsShell({ onClose }: SettingsModalProps) {
             </div>
           )}
 
-          {tab === 'extensions' && (
-            <>
-              <div className="settings-section-desc">
-                Pi 扩展为 Agent 提供额外工具、自定义命令与事件钩子（input / before_provider_request /
-                tool_call / tool_result）。扩展来源：extensions/node_modules 中的 npm 包（pi.extensions
-                manifest）与项目 .pi/extensions 目录扩展。启停切换对新会话/命令列表即时生效，
-                运行中的会话不热更新（需新会话使用新配置）。
-              </div>
-              {extensionsLoading && <div className="settings-field-hint">加载中...</div>}
-              {!extensionsLoading && extensions.length === 0 && (
-                <div className="settings-field-hint" style={{ marginBottom: 8 }}>
-                  未发现扩展
-                </div>
-              )}
-              {extensions.map((ext) => (
-                <div key={ext.name} className="mcp-server-item">
-                  <div className="mcp-server-info">
-                    <div className="mcp-server-name-row">
-                      <span className="mcp-server-name">{ext.name}</span>
-                      <span className={`mcp-server-badge${ext.enabled ? ' on' : ' off'}`}>
-                        {ext.enabled ? '已启用' : '已停用'}
-                      </span>
-                      <span className={`mcp-server-badge ${ext.source === 'npm' ? 'builtin' : ''}`}>
-                        {ext.source === 'npm' ? 'npm' : 'dir'}
-                      </span>
-                    </div>
-                    <div className="mcp-server-meta">
-                      工具 {ext.toolCount} 个 · 命令 {ext.commandCount} 个
-                    </div>
-                    {ext.description && <div className="mcp-server-desc">{ext.description}</div>}
-                    {!ext.enabled && (
-                      <div className="mcp-server-hint">停用的扩展不提供工具/命令，不触发事件钩子</div>
-                    )}
-                  </div>
-                  <button className="btn btn-secondary btn-sm" onClick={() => handleExtensionToggle(ext)}>
-                    {ext.enabled ? '停用' : '启用'}
-                  </button>
-                </div>
-              ))}
-            </>
-          )}
+          {tab === 'extensions' && <ExtensionsPanel />}
 
-          {tab === 'external' && (
-            <>
-              <div className="settings-section-desc">
-                外部服务的查询链接（知识库 / 文件管理系统为内置项；支持自定义新增）。保存后即时生效（无需重启）。
-              </div>
-              {extServices.map((s, i) => (
-                <div key={s.id} className="preset-item" style={{ marginBottom: 8 }}>
-                  <div className="preset-info" style={{ flex: 1, minWidth: 0 }}>
-                    <div className="preset-name">
-                      {s.title}
-                      {(s.id === 'kb' || s.id === 'filesys') && <span className="model-default-badge">内置</span>}
-                    </div>
-                    <div className="preset-meta" style={{ wordBreak: 'break-all' }}>{s.url || '未配置链接'}</div>
-                    {s.description && (
-                      <div className="settings-field-hint" style={{ marginTop: 2 }}>{s.description}</div>
-                    )}
-                  </div>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => handleExtTest(s)}
-                    disabled={extTesting !== null}
-                    style={{ marginLeft: 8 }}
-                  >
-                    {extTesting === s.id ? '测试中...' : '测试连接'}
-                  </button>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => handleOpenEditService(i)}
-                    style={{ marginLeft: 8 }}
-                  >
-                    编辑
-                  </button>
-                </div>
-              ))}
-              <button className="btn btn-secondary" onClick={handleOpenAddService} style={{ marginBottom: 12 }}>
-                + 新增服务
-              </button>
-              {showServiceModal && (
-                <div className="modal-overlay">
-                  <ResizableModal width={480} onEsc={handleCloseServiceModal}>
-                    <div className="modal-header">
-                      <h2>{editingServiceIndex !== null ? '编辑外部服务' : '新增外部服务'}</h2>
-                      <button className="modal-close-btn" onClick={handleCloseServiceModal}>&#10005;</button>
-                    </div>
-                    <div className="body" style={{ paddingTop: 12 }}>
-                      <div className="form-group">
-                        <label>标题</label>
-                        <input
-                          type="text"
-                          value={newService.title}
-                          onChange={(e) => setNewService({ ...newService, title: e.target.value })}
-                          placeholder="如：企业知识库 / 内网文档"
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label>链接</label>
-                        <input
-                          type="text"
-                          value={newService.url}
-                          onChange={(e) => setNewService({ ...newService, url: e.target.value })}
-                          placeholder="http://host:port?token=xxx"
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label>描述（可选）</label>
-                        <textarea
-                          rows={2}
-                          value={newService.description}
-                          onChange={(e) => setNewService({ ...newService, description: e.target.value })}
-                          placeholder="这个服务是做什么的，怎么使用"
-                        />
-                      </div>
-                    </div>
-                    <div className="foot">
-                      {editingServiceIndex !== null && (
-                        <button className="btn btn-danger" onClick={() => void handleDeleteFromServiceModal()} style={{ marginRight: 'auto' }}>
-                          删除
-                        </button>
-                      )}
-                      <button className="btn btn-secondary" onClick={handleCloseServiceModal}>取消</button>
-                      <button className="btn btn-primary" onClick={handleSaveServiceModal}>
-                        {editingServiceIndex !== null ? '保存修改' : '添加'}
-                      </button>
-                    </div>
-                  </ResizableModal>
-                </div>
-              )}
-            </>
-          )}
+          {tab === 'external' && <ExternalPanel />}
 
-          {tab === 'user' && (
-            <div className="user-settings">
-              <div className="user-profile-card">
-                <div className="user-avatar-section">
-                  <div className="user-avatar" onClick={() => document.getElementById('avatar-input')?.click()}>
-                    {avatar ? (
-                      <img src={avatar} alt="头像" className="user-avatar-img" />
-                    ) : (
-                      <span className="user-avatar-letter">{user?.username?.[0]?.toUpperCase() || '?'}</span>
-                    )}
-                    <div className="user-avatar-overlay">点击更换</div>
-                  </div>
-                  <input
-                    id="avatar-input"
-                    type="file"
-                    accept="image/*"
-                    style={{ display: 'none' }}
-                    onChange={handleAvatarChange}
-                  />
-                </div>
-                <div className="user-info-section">
-                  <div className="user-info-row">
-                    <span className="user-info-label">用户名</span>
-                    <span className="user-info-value">{user?.username || '-'}</span>
-                  </div>
-                  <div className="user-info-row">
-                    <span className="user-info-label">账号</span>
-                    <span className="user-info-value">{user?.account || '-'}</span>
-                  </div>
-                  {user?.last_login_at && (
-                    <div className="user-info-row">
-                      <span className="user-info-label">上次登录</span>
-                      <span className="user-info-value">{user.last_login_at}</span>
-                    </div>
-                  )}
-                </div>
-                <button className="btn btn-danger user-logout-btn" onClick={() => useAuthStore.getState().logout()}>
-                  退出登录
-                </button>
-              </div>
-            </div>
-          )}
+          {tab === 'user' && <UserPanel />}
 
           </div>
         </div>
-        {/* 底部统一保存栏：所有 tab 的「保存」固定在此处（按 tab 分派各自的保存动作）；
-            无保存语义的 tab（账户/模型设置/扩展/MCP 操作即时生效）不显示 */}
-        {tab !== 'user' && tab !== 'presets' && tab !== 'mcp' && tab !== 'extensions' && (
-          <div className="settings-bottom-bar">
-            <button
-              className="btn btn-primary"
-              onClick={handleBottomSave}
-              disabled={saving || memorySaving || advSaving || extSaving}
-            >
-              {saving || memorySaving || advSaving || extSaving ? '保存中...' : '保存'}
-            </button>
-          </div>
-        )}
+        {/* 底部保存栏：位置固定在弹窗底部（视觉不变），但**内容由当前激活的域通过
+            useSettingsForm().setFooter 自行提供** —— 壳不再按 tab 分派保存动作，
+            也不再维护"哪些 tab 无保存语义"的排除清单（2026-10 架构改造）。 */}
+        {footer && <div className="settings-bottom-bar">{footer}</div>}
         {browsing && (
           <DirBrowser
             currentPath={form.work_dir}

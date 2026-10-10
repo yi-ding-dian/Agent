@@ -11,7 +11,7 @@
  *  - 「思考级别归一化」effect 特意放在 Provider（而非某个面板内）：它原先无条件运行，
  *    若跟随面板挂载，切到别的 tab 时归一化会停摆、保存出与当前模型不匹配的级别。
  */
-import { createContext, useContext, useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useState, type DependencyList, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { useChatStore } from '../../../store/chat-store';
 import type { AdvancedConfig, ConfigData, ToolPermissionValue } from '../../../types/api';
 import { DEFAULT_ADVANCED_CONFIG } from '../../../../shared/types.js';
@@ -48,9 +48,17 @@ export interface SettingsFormContextValue {
   handleRateLimitBlur: (field: string) => void;
   /** 权限工具清单：固定工具 + 后端返回的额外工具键（扩展/MCP 工具） */
   permissionTools: string[];
-  /** 全量保存（POST /api/config）并在成功后关闭弹窗 */
+  /** 全量保存（POST /api/config）并在成功后关闭弹窗 —— 供「常规 / Agent 限流 / 工具权限」三域使用 */
   save: () => Promise<void>;
   saving: boolean;
+  /**
+   * 底部保存栏内容。由**当前激活的域**自行声明：
+   *  - 有保存语义的域（memory / advanced / external，或共用一个 save 的前三个域）设置自己的按钮；
+   *  - 无保存语义的域（账户 / 模型设置 / MCP / 扩展 —— 操作即时生效）不设置，保存栏整体不渲染。
+   * 这样壳不再需要「按 tab 分派保存动作」和「排除若干 tab」两处硬编码（2026-10 架构改造）。
+   */
+  footer: ReactNode;
+  setFooter: (node: ReactNode) => void;
 }
 
 const SettingsFormContext = createContext<SettingsFormContextValue | null>(null);
@@ -95,6 +103,7 @@ export function SettingsFormProvider({
     advanced: { ...DEFAULT_ADVANCED_CONFIG },
   });
   const [saving, setSaving] = useState(false);
+  const [footer, setFooter] = useState<ReactNode>(null);
 
   // 服务端配置到达后并入表单
   useEffect(() => {
@@ -182,6 +191,8 @@ export function SettingsFormProvider({
     permissionTools,
     save,
     saving,
+    footer,
+    setFooter,
   };
 
   return <SettingsFormContext.Provider value={value}>{children}</SettingsFormContext.Provider>;
@@ -191,4 +202,19 @@ export function useSettingsForm(): SettingsFormContextValue {
   const ctx = useContext(SettingsFormContext);
   if (!ctx) throw new Error('useSettingsForm 必须在 SettingsFormProvider 内使用');
   return ctx;
+}
+
+/**
+ * 域组件用它声明自己的底部保存栏内容（不调用 = 该域无保存语义，保存栏不渲染）。
+ *
+ * 用 useLayoutEffect 而非 useEffect：切 tab 时要在浏览器绘制前把 footer 换好，
+ * 否则会先闪一帧空的保存栏。
+ */
+export function useSettingsFooter(node: ReactNode, deps: DependencyList = []): void {
+  const { setFooter } = useSettingsForm();
+  useLayoutEffect(() => {
+    setFooter(node);
+    return () => setFooter(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
 }
