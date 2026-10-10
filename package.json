@@ -1,9 +1,55 @@
 {
   "name": "myagent",
   "version": "1.0.0",
-  "description": "MyAgent - 个人智能 Agent 系统（Express + React，基于 pi-mono）",
+  "description": "MyAgent - 个人智能 Agent 系统（Express + React + Electron，基于 pi-mono）",
   "license": "MIT",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bash start.sh",
+    "dev:server": "tsx watch src/server/index.ts",
+    "dev:client": "vite",
+    "build": "npm run build:client && npm run build:server",
+    "build:client": "vite build",
+    "build:server": "esbuild src/server/index.ts --bundle --format=esm --platform=node --packages=external --outfile=build/server-dist/index.js",
+    "build:electron": "esbuild src/server/agent-engine/index.ts --bundle --outfile=build/dist/main/agent-engine.mjs --format=esm --platform=node --packages=external --target=node20",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.web.json && tsc -p tsconfig.main.json",
+    "test": "node --import tsx --test test/server/unit/*.test.ts",
+    "start": "node build/server-dist/index.js"
+  },
   "dependencies": {
-    "pi-agent-pi-markitdown": "^1.0.2"
+    "@earendil-works/pi-agent-core": "^0.80.10",
+    "@earendil-works/pi-ai": "^0.80.10",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/sql.js": "^1.4.11",
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^13.0.1",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "highlight.js": "^11.9.0",
+    "marked": "^15.0.0",
+    "pi-agent-pi-markitdown": "^1.0.2",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "sql.js": "^1.14.1",
+    "typebox": "1.1.38",
+    "ws": "^8.18.0",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/ws": "^8.5.0",
+    "@vitejs/plugin-react": "^4.0.0",
+    "electron": "^33.0.0",
+    "esbuild": "^0.28.1",
+    "playwright": "^1.61.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0",
+    "vite": "^6.0.0"
   }
 }

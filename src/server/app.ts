@@ -10,6 +10,7 @@ import { requestLogger } from './middleware/request-logger.js';
 import { createAuthRouter } from './auth/index.js';
 import { createAuthMiddleware } from './auth/index.js';
 import { createAdminRouter } from './admin/admin.routes.js';
+import { config } from './config.js';
 
 export function createApp(frontendDir: string) {
   const app = express();
@@ -44,7 +45,7 @@ export function createApp(frontendDir: string) {
   app.use('/api', apiRouter);
 
   // 5. 管理员页面
-  const adminHtmlPath = path.resolve(process.cwd(), 'public', 'admin.html');
+  const adminHtmlPath = path.join(config.publicDir, 'admin.html');
   app.get('/admin', (_req, res) => {
     if (fs.existsSync(adminHtmlPath)) {
       res.sendFile(adminHtmlPath);

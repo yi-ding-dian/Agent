@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { config } from '../../src/config.js';
+import { config } from '../../../src/server/config.js';
 import {
   ensureMemoryFile,
   getMemory,
@@ -27,7 +27,7 @@ import {
   MEMORY_FILE_TEMPLATE,
   MEMORY_MAX_ENTRIES,
   MEMORY_MAX_FILE_LENGTH,
-} from '../../src/services/memory-service.js';
+} from '../../../src/server/services/memory-service.js';
 
 let tmpDir: string;
 let originalDataDir: string;

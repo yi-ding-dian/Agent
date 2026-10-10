@@ -8,14 +8,16 @@ node_modules/
 **/node_modules/
 
 # ── 构建产物 ──────────────────────────────
+# 注意：**/dist/ 覆盖 src/client/dist（vite 产物，原 frontend/dist）
 **/dist/
 **/dist-electron/
 **/frontend-dist/
-backend/dist/
-frontend/dist/
+# Electron 主进程编译产物（tsc -p tsconfig.main.json → build/dist）
 build/dist/
 build/dist-electron/
 build/frontend-dist/
+# 后端 esbuild 产物（原 backend/dist）
+build/server-dist/
 # 部署副本：含真实 API key（webSearch.js）与用户数据（myagent.db），严禁提交
 build/deploy/
 # 前端构建产物（hash CSS）

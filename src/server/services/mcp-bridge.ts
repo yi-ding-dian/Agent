@@ -338,7 +338,10 @@ export async function initMcpBridge(mcpDir: string): Promise<McpBridge> {
 export async function rebuildMcpBridge(): Promise<void> {
   if (!_bridge) {
     // 桥接尚未初始化（如纯 API 场景）→ 按配置直接初始化
-    const bridge = new McpBridge(_mcpDir ?? process.cwd());
+    // 兜底 mcp 目录与 index.ts 的 initMcpBridge 同约定（项目根/mcp）。
+    // 注意别退回裸 process.cwd()：McpBridge 内部取 mcpDir 的上一级作为工作目录
+    // （见下方 builtin 分支），传 cwd 会算到项目根的上级去。
+    const bridge = new McpBridge(_mcpDir ?? path.resolve(config.dataDir, '..', 'mcp'));
     await bridge.connect();
     _bridge = bridge;
     return;

@@ -7,10 +7,10 @@
     "erasableSyntaxOnly": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "outDir": "./dist",
-    "rootDir": "./src",
+    "outDir": "build/server",
+    "rootDir": "src/server",
     "declaration": true,
     "types": ["node"]
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/server"]
 }

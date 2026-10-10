@@ -1,8 +1,20 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+/**
+ * 项目根目录。
+ *
+ * 约定：所有启动入口都以**项目根**为 cwd —— 根 start.sh、scripts/dev、deploy/start.sh
+ * 均满足（后者还显式导出 DATA_DIR / FRONTEND_DIR）。
+ *
+ * 2026-10 架构改造：源码由 backend/ + frontend/ 两个包迁至 src/{server,client}，
+ * 本模块不再沿用"后端代码位于项目下一级"的旧约定 —— 旧的 `cwd + '..'` 在搬迁后会
+ * **静默算错路径**（编译期看不出来，运行时才炸）。
+ */
+const PROJECT_ROOT = process.cwd();
+
 function loadEnv() {
-  const envPath = path.resolve(process.cwd(), '.env');
+  const envPath = path.resolve(PROJECT_ROOT, '.env');
   if (fs.existsSync(envPath)) {
     const content = fs.readFileSync(envPath, 'utf-8');
     for (const line of content.split('\n')) {
@@ -24,8 +36,11 @@ const getInt = (key: string, fallback: number) => parseInt(process.env[key] || S
 
 export const config = {
   port: getInt('PORT', 7980),
-  dataDir: getStr('DATA_DIR', path.resolve(process.cwd(), '..', 'data')),
-  frontendDir: getStr('FRONTEND_DIR', path.resolve(process.cwd(), '..', 'frontend', 'dist')),
+  dataDir: getStr('DATA_DIR', path.resolve(PROJECT_ROOT, 'data')),
+  // 前端源码今在 src/client/，vite 产物默认落在其下 dist/
+  frontendDir: getStr('FRONTEND_DIR', path.resolve(PROJECT_ROOT, 'src', 'client', 'dist')),
+  // 后端自带的静态页（管理员页 admin.html）
+  publicDir: getStr('PUBLIC_DIR', path.resolve(PROJECT_ROOT, 'src', 'server', 'public')),
   adminAccount: getStr('ADMIN_ACCOUNT', 'admin'),
   adminPassword: getStr('ADMIN_PASSWORD', '123456'),
   // 注意：本系统不再有"出厂默认模型"。QWEN_BASE_URL / QWEN_MODEL 未配置即为空字符串，
@@ -44,9 +59,9 @@ export const config = {
   agentBaseUrl: getStr('AGENT_BASE_URL', ''),
   agentModel: getStr('AGENT_MODEL', ''),
   agentApiKey: getStr('AGENT_API_KEY', ''),
-  // 默认工作目录 = **项目根**（backend 的上一级），与上面的 dataDir / frontendDir 同一约定。
-  // 注意别用裸 process.cwd()：那会落到 backend/ —— 后端代码目录，不是 Agent 该干活的地方。
-  workDir: getStr('WORK_DIR', path.resolve(process.cwd(), '..')),
+  // 默认工作目录 = **项目根**，与上面的 dataDir / frontendDir 同一约定。
+  // 搬迁后 cwd 即项目根，故直接用 PROJECT_ROOT（旧版因 cwd 落在 backend/ 才需 '..' 回退）。
+  workDir: getStr('WORK_DIR', PROJECT_ROOT),
   sessionTimeoutMs: 30 * 60 * 1000,
   llmTimeoutMs: getInt('LLM_TIMEOUT_MS', 120000),
   defaultMaxTokens: 65535,

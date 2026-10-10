@@ -3,9 +3,10 @@
   "version": "1.0.0",
   "description": "MyAgent 桌面应用（Electron）",
   "license": "MIT",
-  "main": "dist/main.js",
+  "type": "commonjs",
+  "main": "dist/main/index.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p ../tsconfig.main.json",
     "pack": "electron-builder --linux AppImage"
   },
   "dependencies": {

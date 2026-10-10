@@ -27,7 +27,7 @@ if [ -f "$PID_FILE" ]; then
 else
   echo ""
   echo "[Stop] 未找到 PID 文件，尝试按进程名查找..."
-  BACKEND_PID=$(pgrep -f "tsx.*src/index\.ts" 2>/dev/null || true)
+  BACKEND_PID=$(pgrep -f "tsx.*src/server/index\.ts" 2>/dev/null || true)
   FRONTEND_PID=$(pgrep -f "vite" 2>/dev/null || true)
   [ -n "$BACKEND_PID" ] && echo "  停止后端 PID $BACKEND_PID" && kill "$BACKEND_PID" 2>/dev/null || true
   [ -n "$FRONTEND_PID" ] && echo "  停止前端 PID $FRONTEND_PID" && kill "$FRONTEND_PID" 2>/dev/null || true

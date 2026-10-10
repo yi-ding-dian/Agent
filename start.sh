@@ -51,16 +51,18 @@ fi
 # ── 后端 ──
 echo ""
 echo "[Backend] 启动后端..."
-cd "$SCRIPT_DIR/backend"
-npx tsx watch src/index.ts &
+# cwd 必须是项目根：后端 config.ts 以 cwd 为项目根解析 data/ 等路径（2026-10 架构改造）
+cd "$SCRIPT_DIR"
+npx tsx watch src/server/index.ts &
 BACKEND_PID=$!
 echo "  PID: $BACKEND_PID  端口: ${PORT}"
 
 # ── 前端 ──
 echo ""
 echo "[Frontend] 启动前端开发服务器..."
-cd "$SCRIPT_DIR/frontend"
-npm run dev &
+# vite 在项目根运行：vite.config.ts 位于根，其 root 指向 src/client
+cd "$SCRIPT_DIR"
+npx vite &
 FRONTEND_PID=$!
 echo "  PID: $FRONTEND_PID  端口: 5173"
 

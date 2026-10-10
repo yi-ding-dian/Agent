@@ -5,6 +5,8 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+// 别名导入：本模块内的 `config` 是限流配置本身，故应用配置用 appConfig
+import { config as appConfig } from '../config.js';
 
 export interface RateLimitConfig {
   /** 每分钟最多工具调用次数 */
@@ -30,7 +32,9 @@ const DEFAULTS: RateLimitConfig = {
 let config: RateLimitConfig = { ...DEFAULTS };
 
 function getFilePath(): string {
-  const dataDir = process.env.DATA_DIR || path.resolve(process.cwd(), '..', 'data');
+  // DATA_DIR 环境变量优先（须运行时读取：测试与部署脚本会在启动前改写它）；
+  // 兜底走统一的应用配置，避免此处重复推导项目路径
+  const dataDir = process.env.DATA_DIR || appConfig.dataDir;
   return path.resolve(dataDir, 'rate-limit-config.json');
 }
 

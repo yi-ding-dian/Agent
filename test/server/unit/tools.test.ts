@@ -8,17 +8,17 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { config } from '../../src/config.js';
-import { createEditFileTool } from '../../src/tools/edit-file.tool.js';
-import { createGrepSearchTool } from '../../src/tools/grep-search.tool.js';
-import { createListFilesTool } from '../../src/tools/list-files.tool.js';
-import { createRememberTool } from '../../src/tools/remember.tool.js';
+import { config } from '../../../src/server/config.js';
+import { createEditFileTool } from '../../../src/server/tools/edit-file.tool.js';
+import { createGrepSearchTool } from '../../../src/server/tools/grep-search.tool.js';
+import { createListFilesTool } from '../../../src/server/tools/list-files.tool.js';
+import { createRememberTool } from '../../../src/server/tools/remember.tool.js';
 import {
   sanitizeMessageForExport,
   sanitizeMessageForImport,
   serializeSessionToJsonl,
   parseSessionJsonl,
-} from '../../src/services/session-jsonl.js';
+} from '../../../src/server/services/session-jsonl.js';
 
 let tmpDir: string;
 let originalDataDir: string;

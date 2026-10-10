@@ -10,11 +10,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { config } from '../../src/config.js';
-import { createQwenModel, NoDefaultModelError } from '../../src/agent/llm-config.js';
-import { getGlobalModel, setGlobalModel } from '../../src/config/global-model-config.js';
-import { initDatabase } from '../../src/db/database.js';
-import { initSessionManager, getSessionManager } from '../../src/services/session-manager.js';
+import { config } from '../../../src/server/config.js';
+import { createQwenModel, NoDefaultModelError } from '../../../src/server/agent/llm-config.js';
+import { getGlobalModel, setGlobalModel } from '../../../src/server/config/global-model-config.js';
+import { initDatabase } from '../../../src/server/db/database.js';
+import { initSessionManager, getSessionManager } from '../../../src/server/services/session-manager.js';
 
 let tmpDir: string;
 let originalDataDir: string;

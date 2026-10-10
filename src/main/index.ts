@@ -202,14 +202,17 @@ function createWindow(): void {
     minHeight: 500,
     title: 'MyAgent',
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      // 产物布局（tsconfig.main.json：rootDir=src → outDir=build/dist）：
+      //   __dirname = build/dist/main，preload 编译到 build/dist/preload/index.js
+      preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
 
   // 已取消连接页：直接加载前端页面（服务器地址由主进程配置提供，登录页设置面板可改）
-  mainWindow.loadFile(path.join(__dirname, '../frontend-dist/index.html'));
+  // frontend-dist 由 build/build.sh 落在 build/ 下（__dirname 为 build/dist/main，故上溯两级）
+  mainWindow.loadFile(path.join(__dirname, '../../frontend-dist/index.html'));
 
   // ─── 拖放导航拦截：目录/文件拖到窗口时，Electron 默认导航到 file://<路径> ───
   // 渲染进程拿不到拖入目录的路径（Electron 33 移除 File.path、拖目录时 text/uri-list
