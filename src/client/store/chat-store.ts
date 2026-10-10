@@ -1,4 +1,7 @@
 import { create } from 'zustand';
+import { createUiSlice } from './chat/ui-slice';
+import { createQueueSlice } from './chat/queue-slice';
+import { createSubagentSlice } from './chat/subagent-slice';
 import {
   liveViews,
   withMessages,
@@ -133,75 +136,30 @@ export interface ChatStore {
 }
 
 
-export const useChatStore = create<ChatStore>((set, get) => ({
+export const useChatStore = create<ChatStore>()((...a) => {
+  const [set, get] = a;
+  return {
+  // ─── 已拆出的 slice（见 chat/ 下各 *-slice.ts） ───
+  ...createUiSlice(...a),
+  ...createQueueSlice(...a),
+  ...createSubagentSlice(...a),
+
   sessions: [],
   activeSessionId: null,
   messages: [],
-  agents: [],
-  flyRequest: null,
   isProcessing: false,
   runningSessions: [],
-  mode: 'agent',
-  planMode: false,
-  planReady: null,
-  error: null,
   config: null,
-  pendingConfirmation: null,
-  scrolledAway: false,
-  scrollToBottomTrigger: 0,
   needsRebuild: false,
   directoryNotice: null,
   wsStatus: 'disconnected',
   engineStatus: null,
-  extensionUI: null,
-  messageQueue: [],
-  steerQueueCount: 0,
   totalUsage: { input: 0, output: 0, total: 0 },
-  pendingDropFiles: null,
-
-  addDropFiles: (files) => set({ pendingDropFiles: files }),
-  consumeDropFiles: () => {
-    const files = get().pendingDropFiles;
-    if (files) set({ pendingDropFiles: null });
-    return files;
-  },
-  dragClearSignal: 0,
-  signalDragClear: () => set((s) => ({ dragClearSignal: s.dragClearSignal + 1 })),
-
-  clearError: () => set({ error: null }),
   /** 魔法飞行结束（MagicFly 组件动画完成后调用），清空触发请求 */
-  clearFly: () => set({ flyRequest: null }),
-
   // 停止子代理：不在本地乐观改状态 —— 后端中止后 subagent 工具会以 tool_end 回流
   // （details.aborted=true），由 handleSSEEvent 统一把该 agent 标为 'aborted'。
   // 这样状态只有一个来源，避免本地猜测与后端不一致。
-  stopSubAgent: async (agentId) => {
-    const sid = get().activeSessionId;
-    if (!sid) return;
-    try {
-      await api.abortSubAgent(sid, agentId);
-    } catch (err: any) {
-      set({ error: err?.message || '停止子代理失败' });
-    }
-  },
-
-  stopAllSubAgents: async () => {
-    const sid = get().activeSessionId;
-    if (!sid) return;
-    try {
-      await api.abortAllSubAgents(sid);
-    } catch (err: any) {
-      set({ error: err?.message || '停止子代理失败' });
-    }
-  },
-  setMode: (mode) => set({ mode }),
-  setPlanMode: (on) => set({ planMode: on, planReady: null }),
   /** 「按此计划执行」：关闭规划并发送执行指令（计划文本随消息发给模型） */
-  executePlan: async () => {
-    const plan = get().planReady;
-    set({ planMode: false, planReady: null });
-    if (plan) await get().sendMessage(`请按以下计划执行：\n\n${plan}`);
-  },
   loadConfig: async () => {
     try {
       // Electron 模式：配置在主进程本地（LLM 直连参数）
@@ -475,78 +433,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   // ─── 消息队列 ──────────────────────
 
-  queueMessage: (text, images) => {
-    if (!text.trim() && (!images || images.length === 0)) return;
-    // 纯文本通过 steer 注入当前 AI 上下文，让 AI 能立即看到
-    if (text.trim()) {
-      // Electron 模式：主进程引擎 steer
-      if (isElectron()) {
-        const sessionId = get().activeSessionId;
-        if (sessionId) {
-          window.myagent!.chatSteer(sessionId, text)
-            .then((data) => {
-              if (data.success) {
-                set((s) => ({ steerQueueCount: s.steerQueueCount + 1 }));
-              }
-            })
-            .catch(() => {});
-        }
-        // 加入队列（用于 QueueIndicator 显示）
-        set((s) => ({ messageQueue: [...s.messageQueue, { text, images }] }));
-        return;
-      }
-      const token = localStorage.getItem('myagent_token');
-      fetch(apiUrl('/api/chat/steer'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ message: text, sessionId: get().activeSessionId }),
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.success) {
-            // steer 成功 → 增加已处理计数，QueueIndicator 即时更新
-            set((s) => ({ steerQueueCount: s.steerQueueCount + 1 }));
-          }
-        })
-        .catch(() => {});
-    }
-    // 加入队列（用于 QueueIndicator 显示 + 图片需要走 rebuild 发送）
-    set((s) => ({ messageQueue: [...s.messageQueue, { text, images }] }));
-  },
-
-  processQueue: () => {
-    const { messageQueue } = get();
-    if (messageQueue.length === 0) return;
-
-    // 检查是否有图片（steer 不支持图片，需要走完整发送路径）
-    const hasImages = messageQueue.some((item) => item.images && item.images.length > 0);
-
-    if (hasImages) {
-      // 有图片：走 rebuild + sendMessage，确保图片能发送
-      const [next, ...rest] = messageQueue;
-      set({ messageQueue: rest, steerQueueCount: 0, needsRebuild: true });
-      // force：此刻上一轮刚结束（done/agent_end 里已置 isProcessing=false），
-      // 出队的消息必须真正发出，不能再被并发守卫挡回队列
-      get().sendMessage(next.text, next.images, { force: true });
-    } else {
-      // 纯文本已通过 steer 处理，清理队列
-      set({ messageQueue: [], steerQueueCount: 0 });
-    }
-  },
-
   // ─── 扩展 UI ────────────────────────
-
-  resolveExtensionUI: (id, response) => {
-    // Electron 模式：走 IPC（主进程扩展 UI 响应通道）
-    if (isElectron()) {
-      window.myagent!.sendExtensionUIResponse({ id, ...response }).catch(() => {});
-      set({ extensionUI: null });
-      return;
-    }
-    const ws = getWSClient();
-    ws.send({ type: 'extension_ui_response', id, ...response });
-    set({ extensionUI: null });
-  },
 
   // ─── 发送消息 ────────────────────────
 
@@ -719,22 +606,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     ws.send({ type: 'abort', sessionId: activeSessionId });
     set({ isProcessing: false });
   },
-
-  confirmDecision: async (decision) => {
-    const { pendingConfirmation } = get();
-    if (!pendingConfirmation) return;
-    // Electron 模式：主进程 pendingConfirmationManager 解挂
-    if (isElectron()) {
-      window.myagent!.confirmDecision(pendingConfirmation.sessionId, decision).catch(() => {});
-      set({ pendingConfirmation: null });
-      return;
-    }
-    try { await api.sendConfirmationDecision(pendingConfirmation.sessionId, decision); } catch { /* ignore */ }
-    set({ pendingConfirmation: null });
-  },
-
-  setScrolledAway: (away) => set({ scrolledAway: away }),
-  scrollToBottom: () => set((s) => ({ scrollToBottomTrigger: s.scrollToBottomTrigger + 1 })),
 
   /** 标记某会话开始/结束执行（幂等；结束由 done/error/aborted 驱动） */
   setSessionRunning: (id, running) => {
@@ -1137,4 +1008,5 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       }
     }
   },
-}));
+  };
+});
