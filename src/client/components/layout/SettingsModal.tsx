@@ -10,6 +10,8 @@ import * as api from '../../services/api';
 import { isElectron } from '../../services/api-config';
 // 共享默认值（真实值导入，非类型擦除）—— 与后端 advanced-config.ts 是同一份
 import { DEFAULT_ADVANCED_CONFIG } from '../../../shared/types.js';
+// 设置面板模块级常量（2026-10 架构改造：由本文件顶部抽出）
+import { TOOL_LABELS, DEFAULT_PERMISSIONS } from '../settings/shared/defaults';
 import {
   getModelPresets,
   saveModelPresets,
@@ -18,6 +20,8 @@ import {
   getLlmOverrides,
   type ModelPreset,
 } from '../../services/api-config';
+// 设置表单基础设施（2026-10 架构改造：form/保存逻辑由本文件抽出，见 settings/shared/）
+import { SettingsFormProvider, useSettingsForm } from '../settings/shared/settings-form';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -28,71 +32,27 @@ type SettingsTab = 'common' | 'agent' | 'presets' | 'permissions' | 'memory' | '
 // 高级设置默认值：定义在 src/shared/types.ts，与后端 advanced-config.ts 共用同一份。
 // 此前此处另存一份、仅靠注释声明"与后端默认一致"，已收敛为单一事实源（见该文件首部说明）。
 
-// 工具权限配置：工具名 → 中文名（未知工具名兜底显示原名）
-const TOOL_LABELS: Record<string, string> = {
-  execute_command: '执行命令',
-  run_python: '运行 Python',
-  read_file: '读取文件',
-  write_file: '写入文件',
-  edit_file: '编辑文件',
-  search_web: '网络搜索',
-  grep_search: '文本搜索',
-  list_files: '列出文件',
-  run_skill: '运行技能',
-  remember: '记住信息',
-  subagent: '子代理',
-};
-
-const DEFAULT_PERMISSIONS: Record<string, ToolPermissionValue> = {
-  execute_command: 'ask',
-  run_python: 'ask',
-  read_file: 'allow',
-  write_file: 'allow',
-  edit_file: 'allow',
-  search_web: 'allow',
-  grep_search: 'allow',
-  list_files: 'allow',
-  run_skill: 'allow',
-  remember: 'allow',
-  subagent: 'allow',
-};
+// TOOL_LABELS / DEFAULT_PERMISSIONS 已抽至 settings/shared/defaults.ts（见上方 import）
 
 export function SettingsModal({ onClose }: SettingsModalProps) {
-  const config = useChatStore((s) => s.config);
-  const saveConfig = useChatStore((s) => s.saveConfig);
+  return (
+    <SettingsFormProvider onClose={onClose}>
+      <SettingsShell onClose={onClose} />
+    </SettingsFormProvider>
+  );
+}
 
-  const [form, setForm] = useState<ConfigData>({
-    // 不再有出厂默认模型：base_url/model/api_key 初始为空（真实值由 GET /api/config 覆盖）
-    base_url: '',
-    api_key: '',
-    model: '',
-    system_prompt: '你是一个智能助手，可以帮助用户解决各种问题。',
-    temperature: 0.7,
-    // maxTokens 已移至「模型设置」（按模型预设生效）。此处固定 65535 与后端
-    // config.defaultMaxTokens 兜底一致，避免常规设置保存时误覆盖后端全局默认。
-    max_tokens: 65535,
-    thinking_level: 'high',
-    enable_thinking: true,
-    thinking_budget: 1024,
-    preserve_thinking: false,
-    work_dir: '/home/user/my-Agent',
-    chat_base_url: '',
-    chat_api_key: '',
-    chat_model: '',
-    agent_base_url: '',
-    agent_api_key: '',
-    agent_model: '',
-    tool_rate_limit_per_minute: 50,
-    agent_max_tool_calls_per_turn: 100,
-    agent_max_consecutive_errors: 5,
-    agent_max_turns: 100,
-    llm_timeout_ms: 300000,
-    tool_permissions: { ...DEFAULT_PERMISSIONS },
-    advanced: { ...DEFAULT_ADVANCED_CONFIG },
-  });
+/**
+ * 设置壳：两栏布局 + 左侧导航 + 右侧内容。
+ *
+ * 表单基础设施（form / setForm / permissionTools / save / saving）由 SettingsFormProvider 提供 ——
+ * 该表单被 常规 / Agent 限流 / 工具权限 / 高级 四个域共享，且由底部保存栏一次性提交，
+ * 故上提到 shared 层而不是留在壳里（2026-10 架构改造）。
+ */
+function SettingsShell({ onClose }: SettingsModalProps) {
+  const { form, setForm, setField, setToolPermission, setAdvanced, setAdvancedNested, permissionTools, handleRateLimitBlur, save, saving } = useSettingsForm();
 
   const [tab, setTab] = useState<SettingsTab>('common');
-  const [saving, setSaving] = useState(false);
   const [browsing, setBrowsing] = useState(false);
   // 跨会话记忆（第 6 个 tab：记忆管理）
   const [memoryText, setMemoryText] = useState('');
@@ -127,40 +87,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   // 服务端全局默认模型（模型设置选中项同步而来；常规 tab「当前模型」展示用）
   const [globalModel, setGlobalModel] = useState<{ id: string; baseUrl: string; apiKey: string } | null>(null);
 
-  const RATE_FIELDS: Record<string, { min: number; max: number; def: number; label: string }> = {
-    tool_rate_limit_per_minute: { min: 10, max: 50, def: 50, label: '每分钟最多工具调用' },
-    agent_max_tool_calls_per_turn: { min: 20, max: 100, def: 100, label: '单轮最多工具调用' },
-    agent_max_consecutive_errors: { min: 5, max: 20, def: 5, label: '连续错误上限' },
-    agent_max_turns: { min: 10, max: 100, def: 100, label: '最大对话轮数' },
-  };
-
-  const handleRateLimitBlur = (field: string) => {
-    const range = RATE_FIELDS[field];
-    const val = form[field as keyof ConfigData] as number;
-    if (val < range.min || val > range.max) {
-      setForm((prev) => ({ ...prev, [field]: range.def }));
-    }
-  };
-
-  useEffect(() => {
-    if (config) {
-      setForm((prev) => ({ ...prev, ...config }));
-    }
-  }, [config]);
-
-  // 当前模型能力（levels）变化时，若 form.thinking_level 不在其级别列表（切换模型残留旧级别，
-  // 或旧配置遗留 'off'）→ 归一化到模型默认级别（优先 high，回退首档），保证保存值始终合法
-  // （滑杆渲染另有 effectiveThinkingLevel 兜底）
-  useEffect(() => {
-    const cap = form.thinking_capability;
-    const levels = cap?.mode === 'levels' ? (cap.levels || []) : [];
-    if (!levels.length || levels.some((l) => l.value === form.thinking_level)) return;
-    setForm((prev) => ({
-      ...prev,
-      thinking_level: levels.find((l) => l.value === 'high')?.value || levels[0]?.value || 'high',
-    }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.thinking_capability, form.thinking_level]);
+  // RATE_FIELDS / handleRateLimitBlur / 服务端配置同步 / 思考级别归一化
+  // 均已移入 SettingsFormProvider（见 settings/shared/settings-form.tsx）
 
   // 切换到记忆管理 tab 时加载当前记忆全文
   useEffect(() => {
@@ -200,53 +128,26 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     }
   }, [tab]);
 
-  const handleChange = (field: keyof ConfigData, value: string | number | boolean) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  };
-
   /** 「浏览」工作目录：Electron 桌面端走系统目录选择对话框；Web 模式走定制目录浏览器 */
   const handleBrowse = async () => {
     if (isElectron() && window.myagent?.selectDirectory) {
       const dir = await window.myagent.selectDirectory();
-      if (dir) handleChange('work_dir', dir);
+      if (dir) setForm((prev) => ({ ...prev, work_dir: dir }));
       return;
     }
     setBrowsing(true);
   };
 
   // ─── 工具权限 ───────────────────────
-
-  const handleToolPermissionChange = (name: string, value: ToolPermissionValue) => {
-    setForm((prev) => ({
-      ...prev,
-      tool_permissions: { ...(prev.tool_permissions || {}), [name]: value },
-    }));
-  };
-
-  // 固定工具列表 + 后端返回的额外工具键（扩展工具/MCP 工具）
-  const permissionTools = Array.from(new Set([
-    ...Object.keys(DEFAULT_PERMISSIONS),
-    ...Object.keys(form.tool_permissions || {}),
-  ]));
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await saveConfig(form);
-      onClose();
-    } catch {
-      /* ignore */
-    } finally {
-      setSaving(false);
-    }
-  };
+  // handleToolPermissionChange / permissionTools 已移入 SettingsFormProvider
+  // （工具权限域与壳共享同一份工具清单与权限 setter）
 
   /** 底部统一保存：按当前 tab 分派各自的保存动作（位置统一，动作语义一致） */
   const handleBottomSave = (): void => {
     if (tab === 'memory') void handleSaveMemory();
     else if (tab === 'advanced') void handleSaveAdvanced();
     else if (tab === 'external') void handleExtSave();
-    else void handleSave();
+    else void save();
   };
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -634,28 +535,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
   const adv = form.advanced ?? DEFAULT_ADVANCED_CONFIG;
 
-  /** 更新 advanced 顶层字段 */
-  const setAdv = (patch: Partial<AdvancedConfig>) => {
-    setForm((prev) => ({
-      ...prev,
-      advanced: { ...DEFAULT_ADVANCED_CONFIG, ...(prev.advanced ?? {}), ...patch },
-    }));
-  };
-
-  /** 更新 advanced 嵌套分组字段（compaction/subagent/memory/search） */
-  const setAdvNested = <K extends 'compaction' | 'subagent' | 'memory' | 'search'>(
-    group: K,
-    field: keyof AdvancedConfig[K],
-    value: number,
-  ) => {
-    setForm((prev) => {
-      const cur = prev.advanced ?? DEFAULT_ADVANCED_CONFIG;
-      return {
-        ...prev,
-        advanced: { ...cur, [group]: { ...cur[group], [field]: value } },
-      };
-    });
-  };
+  // setAdv / setAdvNested 已移入 SettingsFormProvider（见 settings/shared/settings-form.tsx）
 
   const handleSaveAdvanced = async () => {
     setAdvSaving(true);
@@ -805,7 +685,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 <label>System Prompt</label>
                 <textarea
                   value={form.system_prompt}
-                  onChange={(e) => handleChange('system_prompt', e.target.value)}
+                  onChange={(e) => setField('system_prompt', e.target.value)}
                   placeholder="系统提示词"
                   rows={2}
                 />
@@ -816,7 +696,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   <input
                     type="text"
                     value={form.work_dir}
-                    onChange={(e) => handleChange('work_dir', e.target.value)}
+                    onChange={(e) => setField('work_dir', e.target.value)}
                     placeholder="输入工作目录路径"
                     list="work-dir-suggestions"
                   />
@@ -840,7 +720,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     max="2"
                     step="0.1"
                     value={form.temperature}
-                    onChange={(e) => handleChange('temperature', parseFloat(e.target.value))}
+                    onChange={(e) => setField('temperature', parseFloat(e.target.value))}
                   />
                 </div>
                 {/* maxTokens 已移至「模型设置」：添加模型时按模型预设设置，随 modelOverrides 生效。
@@ -855,7 +735,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   max={600}
                   step={10}
                   value={form.llm_timeout_ms / 1000}
-                  onChange={(e) => handleChange('llm_timeout_ms', parseInt(e.target.value) * 1000)}
+                  onChange={(e) => setField('llm_timeout_ms', parseInt(e.target.value) * 1000)}
                 />
                 <div className="timeout-labels">
                   <span>30s</span>
@@ -907,7 +787,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                         max={capLevels.length - 1}
                         step="1"
                         value={thinkingSliderIndex}
-                        onChange={(e) => handleChange('thinking_level', capLevels[parseInt(e.target.value)]?.value || 'high')}
+                        onChange={(e) => setField('thinking_level', capLevels[parseInt(e.target.value)]?.value || 'high')}
                         className="thinking-slider"
                       />
                       <div className="thinking-fire-particles">
@@ -930,7 +810,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                           max={thinkingCap.switchConfig.budgetMax}
                           step={256}
                           value={form.thinking_budget}
-                          onChange={(e) => handleChange('thinking_budget', parseInt(e.target.value))}
+                          onChange={(e) => setField('thinking_budget', parseInt(e.target.value))}
                         />
                         <span className="thinking-budget-value">
                           {form.thinking_budget > 0 ? `${form.thinking_budget} tokens` : '不限制'}
@@ -943,7 +823,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                           <input
                             type="checkbox"
                             checked={form.preserve_thinking}
-                            onChange={(e) => handleChange('preserve_thinking', e.target.checked)}
+                            onChange={(e) => setField('preserve_thinking', e.target.checked)}
                           />
                           <span className="toggle-slider" />
                         </label>
@@ -972,7 +852,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   <input
                     type="number"
                     value={form.tool_rate_limit_per_minute}
-                    onChange={(e) => handleChange('tool_rate_limit_per_minute', parseInt(e.target.value) || 0)}
+                    onChange={(e) => setField('tool_rate_limit_per_minute', parseInt(e.target.value) || 0)}
                     onBlur={() => handleRateLimitBlur('tool_rate_limit_per_minute')}
                     min={10}
                     max={50}
@@ -983,7 +863,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   <input
                     type="number"
                     value={form.agent_max_tool_calls_per_turn}
-                    onChange={(e) => handleChange('agent_max_tool_calls_per_turn', parseInt(e.target.value) || 0)}
+                    onChange={(e) => setField('agent_max_tool_calls_per_turn', parseInt(e.target.value) || 0)}
                     onBlur={() => handleRateLimitBlur('agent_max_tool_calls_per_turn')}
                     min={20}
                     max={100}
@@ -996,7 +876,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   <input
                     type="number"
                     value={form.agent_max_consecutive_errors}
-                    onChange={(e) => handleChange('agent_max_consecutive_errors', parseInt(e.target.value) || 0)}
+                    onChange={(e) => setField('agent_max_consecutive_errors', parseInt(e.target.value) || 0)}
                     onBlur={() => handleRateLimitBlur('agent_max_consecutive_errors')}
                     min={5}
                     max={20}
@@ -1007,7 +887,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   <input
                     type="number"
                     value={form.agent_max_turns}
-                    onChange={(e) => handleChange('agent_max_turns', parseInt(e.target.value) || 0)}
+                    onChange={(e) => setField('agent_max_turns', parseInt(e.target.value) || 0)}
                     onBlur={() => handleRateLimitBlur('agent_max_turns')}
                     min={10}
                     max={100}
@@ -1135,7 +1015,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   <label>{TOOL_LABELS[name] || name}</label>
                   <select
                     value={form.tool_permissions?.[name] || 'allow'}
-                    onChange={(e) => handleToolPermissionChange(name, e.target.value as ToolPermissionValue)}
+                    onChange={(e) => setToolPermission(name, e.target.value as ToolPermissionValue)}
                   >
                     <option value="allow">允许</option>
                     <option value="ask">询问</option>
@@ -1197,7 +1077,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   max={95}
                   step={5}
                   value={Math.round(adv.compaction.threshold * 100)}
-                  onChange={(e) => setAdvNested('compaction', 'threshold', parseInt(e.target.value) / 100)}
+                  onChange={(e) => setAdvancedNested('compaction', 'threshold', parseInt(e.target.value) / 100)}
                 />
                 <div className="settings-field-hint">
                   上下文用量达到该比例时自动压缩（50%-95%）。调低更早压缩、更省 token；调高保留更多上下文。
@@ -1211,7 +1091,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     min={1}
                     max={20}
                     value={adv.compaction.minTurns}
-                    onChange={(e) => setAdvNested('compaction', 'minTurns', parseInt(e.target.value) || 4)}
+                    onChange={(e) => setAdvancedNested('compaction', 'minTurns', parseInt(e.target.value) || 4)}
                   />
                   <div className="settings-field-hint">压缩后最近 N 轮对话完整保留，供 Agent 感知最新进展</div>
                 </div>
@@ -1219,7 +1099,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   <label>摘要辅助模型</label>
                   <select
                     value={adv.summaryModel}
-                    onChange={(e) => setAdv({ summaryModel: e.target.value as 'auto' | 'main' })}
+                    onChange={(e) => setAdvanced({ summaryModel: e.target.value as 'auto' | 'main' })}
                   >
                     <option value="auto">自动（优先 DeepSeek，失败回退主模型）</option>
                     <option value="main">主模型（使用当前对话模型生成摘要）</option>
@@ -1239,7 +1119,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     min={1}
                     max={1000}
                     value={adv.subagent.maxTurns}
-                    onChange={(e) => setAdvNested('subagent', 'maxTurns', parseInt(e.target.value) || 50)}
+                    onChange={(e) => setAdvancedNested('subagent', 'maxTurns', parseInt(e.target.value) || 50)}
                   />
                   <div className="settings-field-hint">子代理最多执行多少轮（LLM 调用次数），1-1000，防止子任务失控</div>
                 </div>
@@ -1250,7 +1130,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     min={1}
                     max={3600}
                     value={Math.round(adv.subagent.timeoutMs / 1000)}
-                    onChange={(e) => setAdvNested('subagent', 'timeoutMs', (parseInt(e.target.value) || 1800) * 1000)}
+                    onChange={(e) => setAdvancedNested('subagent', 'timeoutMs', (parseInt(e.target.value) || 1800) * 1000)}
                   />
                   <div className="settings-field-hint">子代理整体超时（秒），1-3600，超时自动中止并返回已有结果</div>
                 </div>
@@ -1261,7 +1141,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     min={1}
                     max={20}
                     value={adv.subagent.maxConcurrent}
-                    onChange={(e) => setAdvNested('subagent', 'maxConcurrent', parseInt(e.target.value) || 5)}
+                    onChange={(e) => setAdvancedNested('subagent', 'maxConcurrent', parseInt(e.target.value) || 5)}
                   />
                   <div className="settings-field-hint">同一会话同时运行的子代理数上限，1-20。主代理一次派多个子代理会并行执行，此项仅防失控</div>
                 </div>
@@ -1279,7 +1159,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     max={5000}
                     step={10}
                     value={adv.memory.maxEntries}
-                    onChange={(e) => setAdvNested('memory', 'maxEntries', parseInt(e.target.value) || 500)}
+                    onChange={(e) => setAdvancedNested('memory', 'maxEntries', parseInt(e.target.value) || 500)}
                   />
                   <div className="settings-field-hint">记忆条数超过上限时自动删除最旧条目，防止文件无限膨胀</div>
                 </div>
@@ -1291,7 +1171,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     max={10000}
                     step={100}
                     value={adv.memory.maxNoteLength}
-                    onChange={(e) => setAdvNested('memory', 'maxNoteLength', parseInt(e.target.value) || 2000)}
+                    onChange={(e) => setAdvancedNested('memory', 'maxNoteLength', parseInt(e.target.value) || 2000)}
                   />
                   <div className="settings-field-hint">Agent 调用记住（remember）工具时的单条内容长度限制</div>
                 </div>
@@ -1305,7 +1185,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   rows={5}
                   value={(adv.commandBlacklist ?? []).join('\n')}
                   onChange={(e) =>
-                    setAdv({
+                    setAdvanced({
                       commandBlacklist: e.target.value
                         .split('\n')
                         .map((s) => s.trim())
@@ -1332,7 +1212,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     min={1}
                     max={600}
                     value={Math.round(adv.search.timeoutMs / 1000)}
-                    onChange={(e) => setAdvNested('search', 'timeoutMs', (parseInt(e.target.value) || 15) * 1000)}
+                    onChange={(e) => setAdvancedNested('search', 'timeoutMs', (parseInt(e.target.value) || 15) * 1000)}
                   />
                   <div className="settings-field-hint">单次搜索请求的最大等待时间（秒）</div>
                 </div>
@@ -1343,7 +1223,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     min={1}
                     max={20}
                     value={adv.search.maxResults}
-                    onChange={(e) => setAdvNested('search', 'maxResults', parseInt(e.target.value) || 8)}
+                    onChange={(e) => setAdvancedNested('search', 'maxResults', parseInt(e.target.value) || 8)}
                   />
                   <div className="settings-field-hint">Agent 搜索时默认返回的结果条数</div>
                 </div>
@@ -1655,7 +1535,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         {browsing && (
           <DirBrowser
             currentPath={form.work_dir}
-            onSelect={(path) => handleChange('work_dir', path)}
+            onSelect={(path) => setField('work_dir', path)}
             onClose={() => setBrowsing(false)}
           />
         )}
