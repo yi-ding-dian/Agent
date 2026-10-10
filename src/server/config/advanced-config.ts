@@ -14,76 +14,23 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { config } from '../config.js';
+// 类型与默认值均取自 src/shared/types.ts（前后端单一事实源）。
+// 迁移缘由：这五个接口原先前端 client/types/api.ts 另写一份（且内联展开子类型），
+// DEFAULTS 也与前端 SettingsModal 的 DEFAULT_ADVANCED 各存一份、靠注释维持一致。
+import {
+  DEFAULT_ADVANCED_CONFIG,
+  type AdvancedConfig,
+  type CompactionConfig,
+  type SubagentConfig,
+  type MemoryConfig,
+  type SearchConfig,
+} from '../../shared/types.js';
 
-export interface CompactionConfig {
-  /** 自动压缩阈值：maxTokens 的百分比比例，范围 0.1-0.95 */
-  threshold: number;
-  /** 尾部保护区 token 预算：最近窗口的比例，范围 0.1-0.5 */
-  tailRatio: number;
-  /** 压缩冷却期（毫秒）：一次压缩后该时间内不再自动触发，范围 1000-600000 */
-  cooldownMs: number;
-  /** 防抖动乘数：本次可压缩内容需 ≥ 上次的该倍数才压缩，范围 1.0-5.0 */
-  minGainRatio: number;
-  /** 尾部保护区最少轮数，范围 1-20 */
-  minTurns: number;
-  /** 头部保护区消息数（首次保留 N 条，压缩后衰减为 N-1 条），范围 1-20 */
-  headMessages: number;
-}
+// re-export：保持既有引用路径（'../config/advanced-config.js'）不变
+export type { AdvancedConfig, CompactionConfig, SubagentConfig, MemoryConfig, SearchConfig };
 
-export interface SubagentConfig {
-  /** 子代理最大轮数（LLM 调用次数），范围 1-1000 */
-  maxTurns: number;
-  /** 子代理整体超时（毫秒），范围 1000-600000 */
-  timeoutMs: number;
-  /**
-   * 同一会话同时可运行的子代理数上限，范围 1-20。
-   * 主代理在一个 turn 内并行调用多个 subagent 是正常用法（pi-agent-core 默认
-   * toolExecution=parallel），本项只用于防止模型失控刷出大量子代理，而非禁止并行。
-   */
-  maxConcurrent: number;
-}
-
-export interface MemoryConfig {
-  /** 记忆条目上限（超限截断最旧条目），范围 50-5000 */
-  maxEntries: number;
-  /** 单条记忆 note 长度上限（remember 工具参数校验），范围 100-10000 */
-  maxNoteLength: number;
-}
-
-export interface SearchConfig {
-  /** 网络搜索超时（毫秒），范围 1000-600000 */
-  timeoutMs: number;
-  /** 搜索结果最大条数，范围 1-20 */
-  maxResults: number;
-}
-
-export interface AdvancedConfig {
-  compaction: CompactionConfig;
-  subagent: SubagentConfig;
-  memory: MemoryConfig;
-  /** 危险命令黑名单（一行一个命令，与代码内置最底线黑名单取并集，配置只增不减） */
-  commandBlacklist: string[];
-  search: SearchConfig;
-  /** 摘要辅助模型：auto=优先 DeepSeek（回退主模型）/ main=直接用当前主模型 */
-  summaryModel: 'auto' | 'main';
-}
-
-/** 默认值：与改造前各模块硬编码常量完全一致（不配置时行为不变） */
-const DEFAULTS: AdvancedConfig = {
-  compaction: {
-    threshold: 0.8,
-    tailRatio: 0.2,
-    cooldownMs: 60_000,
-    minGainRatio: 1.1,
-    minTurns: 4,
-    headMessages: 2,
-  },
-  subagent: { maxTurns: 50, timeoutMs: 1_800_000, maxConcurrent: 5 }, // 用户偏好：轮数默认 50（1-1000），超时默认 1800 秒（1-3600）；并发默认 5
-  memory: { maxEntries: 500, maxNoteLength: 2000 },
-  commandBlacklist: ['sudo', 'mkfs', 'dd', 'rm -rf /', 'chmod 777', 'mkfs.ext4'],
-  search: { timeoutMs: 15_000, maxResults: 8 },
-  summaryModel: 'auto',
-};
+/** 默认值：单一事实源在 shared，与前端「高级」设置面板共用同一份（不配置时行为不变） */
+const DEFAULTS = DEFAULT_ADVANCED_CONFIG;
 
 /** 各数字字段的合法范围（key → [min, max]） */
 const BOUNDS: Record<string, [number, number]> = {

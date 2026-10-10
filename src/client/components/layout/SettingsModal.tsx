@@ -8,6 +8,8 @@ import { DirBrowser } from '../common/DirBrowser';
 import type { AdvancedConfig, ConfigData, ExtensionInfo, ExternalServiceEntry, McpServerConfig, ToolPermissionValue } from '../../types/api';
 import * as api from '../../services/api';
 import { isElectron } from '../../services/api-config';
+// 共享默认值（真实值导入，非类型擦除）—— 与后端 advanced-config.ts 是同一份
+import { DEFAULT_ADVANCED_CONFIG } from '../../../shared/types.js';
 import {
   getModelPresets,
   saveModelPresets,
@@ -23,22 +25,8 @@ interface SettingsModalProps {
 
 type SettingsTab = 'common' | 'agent' | 'presets' | 'permissions' | 'memory' | 'user' | 'advanced' | 'mcp' | 'extensions' | 'external';
 
-// 高级设置默认值（与后端 data/advanced-config.json 默认一致，供 GET 未返回时兜底）
-const DEFAULT_ADVANCED: AdvancedConfig = {
-  compaction: {
-    threshold: 0.8,
-    tailRatio: 0.2,
-    cooldownMs: 60000,
-    minGainRatio: 1.1,
-    minTurns: 4,
-    headMessages: 2,
-  },
-  subagent: { maxTurns: 50, timeoutMs: 1800000, maxConcurrent: 5 },
-  memory: { maxEntries: 500, maxNoteLength: 2000 },
-  commandBlacklist: ['sudo', 'mkfs', 'dd', 'rm -rf /', 'chmod 777', 'mkfs.ext4'],
-  search: { timeoutMs: 15000, maxResults: 8 },
-  summaryModel: 'auto',
-};
+// 高级设置默认值：定义在 src/shared/types.ts，与后端 advanced-config.ts 共用同一份。
+// 此前此处另存一份、仅靠注释声明"与后端默认一致"，已收敛为单一事实源（见该文件首部说明）。
 
 // 工具权限配置：工具名 → 中文名（未知工具名兜底显示原名）
 const TOOL_LABELS: Record<string, string> = {
@@ -100,7 +88,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     agent_max_turns: 100,
     llm_timeout_ms: 300000,
     tool_permissions: { ...DEFAULT_PERMISSIONS },
-    advanced: { ...DEFAULT_ADVANCED },
+    advanced: { ...DEFAULT_ADVANCED_CONFIG },
   });
 
   const [tab, setTab] = useState<SettingsTab>('common');
@@ -644,13 +632,13 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
   const [advSaving, setAdvSaving] = useState(false);
 
-  const adv = form.advanced ?? DEFAULT_ADVANCED;
+  const adv = form.advanced ?? DEFAULT_ADVANCED_CONFIG;
 
   /** 更新 advanced 顶层字段 */
   const setAdv = (patch: Partial<AdvancedConfig>) => {
     setForm((prev) => ({
       ...prev,
-      advanced: { ...DEFAULT_ADVANCED, ...(prev.advanced ?? {}), ...patch },
+      advanced: { ...DEFAULT_ADVANCED_CONFIG, ...(prev.advanced ?? {}), ...patch },
     }));
   };
 
@@ -661,7 +649,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     value: number,
   ) => {
     setForm((prev) => {
-      const cur = prev.advanced ?? DEFAULT_ADVANCED;
+      const cur = prev.advanced ?? DEFAULT_ADVANCED_CONFIG;
       return {
         ...prev,
         advanced: { ...cur, [group]: { ...cur[group], [field]: value } },

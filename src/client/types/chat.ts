@@ -1,3 +1,7 @@
+// SubagentEvent 定义在 src/shared/types.ts（前后端单一事实源）。
+// 需 import 到本地作用域供下方 AgentInfo.events 使用，同时 re-export 给既有引用方。
+import type { SubagentEvent } from '../../shared/types.js';
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'tool' | 'system';
@@ -40,25 +44,9 @@ export interface ToolCallInfo {
 
 /**
  * 子代理实时事件（后端 subagent 工具 onUpdate 推送，经 SSE tool_update.partialResult.details.subagentEvent 到达）。
- * 字段风格与 ToolCallInfo 对齐：toolName/args/result/isError。
+ * 定义已迁至 src/shared/types.ts（前后端单一事实源；原前后端逐字段一致，仅注释措辞不同）。
  */
-export interface SubagentEvent {
-  kind: 'tool_start' | 'tool_end' | 'text_delta' | 'thinking_delta' | 'agent_end';
-  /** 事件发生时间（毫秒时间戳，格式化 HH:MM:SS.mmm） */
-  ts?: number;
-  /** 子代理 id（= 外层 subagent 工具调用的 toolCallId） */
-  agentId?: string;
-  /** 子代理调用的工具名（tool_start / tool_end） */
-  toolName?: string;
-  /** 工具参数摘要（tool_start） */
-  args?: unknown;
-  /** 工具结果摘要（tool_end） */
-  result?: unknown;
-  /** 回复文本增量（text_delta）或思考增量（thinking_delta） */
-  text?: string;
-  /** 是否出错（tool_end） */
-  isError?: boolean;
-}
+export type { SubagentEvent };
 
 /** 干活的子代理（会话级，切会话清空） */
 export interface AgentInfo {

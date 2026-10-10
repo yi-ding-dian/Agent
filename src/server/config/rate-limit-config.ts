@@ -7,19 +7,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 // 别名导入：本模块内的 `config` 是限流配置本身，故应用配置用 appConfig
 import { config as appConfig } from '../config.js';
+import type { RateLimitConfig } from '../../shared/types.js';
 
-export interface RateLimitConfig {
-  /** 每分钟最多工具调用次数 */
-  tool_rate_limit_per_minute: number;
-  /** 每轮最多工具调用次数 */
-  agent_max_tool_calls_per_turn: number;
-  /** 连续错误阈值 */
-  agent_max_consecutive_errors: number;
-  /** 最大对话轮数 */
-  agent_max_turns: number;
-  /** LLM 超时时间（毫秒） */
-  llm_timeout_ms: number;
-}
+// 类型定义已迁至 src/shared/types.ts（前后端单一事实源），此处 re-export 保持既有引用不变。
+// 迁移缘由：前端曾另写一份且缺 llm_timeout_ms（漂移）。
+export type { RateLimitConfig };
 
 const DEFAULTS: RateLimitConfig = {
   tool_rate_limit_per_minute: 50,

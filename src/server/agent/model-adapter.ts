@@ -10,29 +10,12 @@
  */
 
 import { config } from '../config.js';
+import type { ThinkingMode, ThinkingLevelItem, ThinkingCapability } from '../../shared/types.js';
 
 // ── 类型 ──
-
-export type ThinkingMode = 'levels' | 'switch' | 'none';
-
-export interface ThinkingLevelItem {
-  value: string;
-  label: string;
-}
-
-export interface ThinkingCapability {
-  mode: ThinkingMode;
-  label: string;
-  levels?: ThinkingLevelItem[];
-  switchConfig?: {
-    supportsBudget: boolean;
-    supportsPreserve: boolean;
-    budgetMax: number;
-    budgetDefault: number;
-  };
-  /** pi-mono compat.thinkingFormat */
-  thinkingFormat?: string;
-}
+// 定义已迁至 src/shared/types.ts（前后端单一事实源）：前端曾另写一份，把 mode 与 levels
+// 内联展开且缺 thinkingFormat（漂移）。此处 re-export 保持既有引用路径不变。
+export type { ThinkingMode, ThinkingLevelItem, ThinkingCapability };
 
 export interface RuntimeThinkingConfig {
   thinkingLevel: string;

@@ -7,10 +7,13 @@
     "erasableSyntaxOnly": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "outDir": "build/server",
-    "rootDir": "src/server",
+    "outDir": "build/server-dist",
+    // rootDir 取 src（而非 src/server）：需覆盖 src/shared —— 共享类型层被 server 与 client
+    // 同时引用，若限定在 src/server 之下会报 TS6059（file is not under rootDir）。
+    // 实际打包走 esbuild（npm run build:server），本配置主要用于类型检查。
+    "rootDir": "src",
     "declaration": true,
     "types": ["node"]
   },
-  "include": ["src/server"]
+  "include": ["src/server", "src/shared"]
 }

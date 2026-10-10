@@ -50,6 +50,7 @@ import { getAgentModelConfig } from '../agent/agent-config.js';
 import { buildThinkingCompat, buildOnPayload } from '../agent/model-adapter.js';
 import { decideToolGate, summarizeArgs } from '../agent/agent-factory.js';
 import { createCustomTools } from './index.js';
+import type { SubagentEvent } from '../../shared/types.js';
 
 // ─── 参数 Schema（TypeBox，与现有工具一致）──────────────────────
 
@@ -94,28 +95,9 @@ export interface SubagentDetails {
   subagentEvent?: SubagentEvent;
 }
 
-/**
- * 子代理实时事件（通过工具 onUpdate → SSE tool_update.partialResult.details.subagentEvent 推送）。
- * 字段风格与前端 ToolCallInfo 对齐：toolName/args/result/isError。
- */
-export interface SubagentEvent {
-  /** 事件类型：子代理调用工具 / 工具结束 / 回复文本增量 / 思考增量 / 子代理整体结束 */
-  kind: 'tool_start' | 'tool_end' | 'text_delta' | 'thinking_delta' | 'agent_end';
-  /** 事件发生时间（毫秒时间戳，pushEvent 时填 Date.now()，前端格式化 HH:MM:SS.mmm） */
-  ts?: number;
-  /** 对应外层主代理的工具调用 id（前端按 tool_update.toolCallId 匹配） */
-  agentId?: string;
-  /** 子代理调用的工具名（tool_start / tool_end） */
-  toolName?: string;
-  /** 工具参数摘要（tool_start，截断防刷屏） */
-  args?: unknown;
-  /** 工具结果摘要（tool_end，截断防刷屏） */
-  result?: unknown;
-  /** 回复文本增量（text_delta，节流推送）或思考增量（thinking_delta）或子代理最终摘要（agent_end 不带，取 tool_end 的 summary） */
-  text?: string;
-  /** 是否出错（tool_end / agent_end） */
-  isError?: boolean;
-}
+// 子代理实时事件类型已迁至 src/shared/types.ts（前后端单一事实源）。
+// 前后端原为逐字段一致（仅注释措辞不同），现收敛为一份；re-export 保持既有引用不变。
+export type { SubagentEvent };
 
 // ─── 常量（默认值）────────────────────────────────────────────
 // 运行时实际取值来自 data/advanced-config.json 的 subagent 段（getAdvancedConfig()

@@ -18,25 +18,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { config } from '../config.js';
+import type { McpServerConfig, McpServersConfig } from '../../shared/types.js';
 
-export interface McpServerConfig {
-  /** 服务名：唯一，^[a-zA-Z0-9_-]{1,32}$，同时作为工具名前缀组成部分 */
-  name: string;
-  /** 可执行命令（仅允许常见可执行名，防注入） */
-  command: string;
-  /** 命令参数数组（每项 ≤200 字符且不含换行） */
-  args: string[];
-  /** 外部 server 的工作目录（可选）：相对路径基于后端进程 cwd 解析；不填默认项目根 */
-  cwd?: string;
-  /** 是否启用（停用的 server 不启动子进程、不暴露工具） */
-  enabled: boolean;
-  /** 描述（中文说明，展示在设置界面） */
-  description: string;
-}
-
-export interface McpServersConfig {
-  servers: McpServerConfig[];
-}
+// 类型定义已迁至 src/shared/types.ts（前后端单一事实源），此处 re-export 保持既有引用路径不变。
+// 迁移缘由：该类型原先前后端各一份，且**已实际漂移** —— 后端有 cwd 字段、前端缺失，
+// 因两个包相互独立、TS 跨包不做检查，编译期无从发现。
+export type { McpServerConfig, McpServersConfig };
 
 /** 默认配置：内置工具服务（保持改造前行为：spawn node mcp/src/index.js，工具不加前缀） */
 export const DEFAULT_MCP_SERVERS: McpServerConfig[] = [

@@ -16,21 +16,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { config } from '../config.js';
+import type { ExternalServiceEntry, ExternalServiceConfig } from '../../shared/types.js';
 
-export interface ExternalServiceEntry {
-  /** 'kb' / 'filesys'（内置）或 uuid（自定义） */
-  id: string;
-  /** 显示标题（必填） */
-  title: string;
-  /** 查询链接（内置条目空串 = 未配置；自定义条目必填） */
-  url: string;
-  /** 描述（可选） */
-  description: string;
-}
-
-export interface ExternalServiceConfig {
-  services: ExternalServiceEntry[];
-}
+// 类型定义已迁至 src/shared/types.ts（前后端单一事实源），此处 re-export 保持既有引用路径不变。
+export type { ExternalServiceEntry, ExternalServiceConfig };
 
 /** 内置条目标题（前端新增时按标题匹配复用内置 id，保证 MCP 契约找到对应条目） */
 export const BUILTIN_SERVICE_TITLES: Record<'kb' | 'filesys', string> = {

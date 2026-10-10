@@ -27,6 +27,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { config } from '../config.js';
+import type { ExtensionSource, ExtensionInfo, ExtensionCommandInfo } from '../../shared/types.js';
 
 // ─── 类型定义 ──────────────────────────────────────────────
 
@@ -85,18 +86,10 @@ export interface ToolResultHookResult {
   isError?: boolean;
 }
 
-/** 扩展来源：npm=extensions/node_modules 中的包；dir=.pi/extensions 下的目录扩展 */
-export type ExtensionSource = 'npm' | 'dir';
-
-/** 扩展元信息（GET /api/extensions 返回；含发现但未启用的扩展） */
-export interface ExtensionInfo {
-  name: string;
-  description: string;
-  source: ExtensionSource;
-  enabled: boolean;
-  toolCount: number;
-  commandCount: number;
-}
+// 扩展来源与元信息类型已迁至 src/shared/types.ts（前后端单一事实源）。
+// 上方已 import 到本地作用域（LoadedExtension 等引用 ExtensionSource），此处 re-export
+// 保持既有引用路径（'../services/extension-loader.js'）不变。
+export type { ExtensionSource, ExtensionInfo, ExtensionCommandInfo };
 
 /** 已加载扩展的内部表示 */
 interface LoadedExtension {

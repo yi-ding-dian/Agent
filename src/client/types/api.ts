@@ -1,3 +1,31 @@
+// ─── 前后端共享类型：定义在 src/shared/types.ts（单一事实源） ───
+//
+// 2026-10 架构改造：以下类型原在前后端各有一份（本文件 + 后端各配置文件），
+// 两个包相互独立、TS 跨包不做检查，漂移无法在编译期暴露 —— McpServerConfig 即已实际漂移
+// （后端有 cwd 字段、前端缺失）。现统一由 src/shared/types.ts 提供。
+//
+// 先 import 到本地作用域（下方 ConfigData 用到了其中两个），再原样透传出去，
+// 使 client 侧既有 import 路径（'../../types/api'）全部保持可用。
+import type {
+  ToolPermissionValue,
+  AdvancedConfig,
+  CompactionConfig,
+  SubagentConfig,
+  MemoryConfig,
+  SearchConfig,
+  McpServerConfig,
+  McpServersConfig,
+  ExtensionInfo,
+  ExtensionCommandInfo,
+  ExtensionSource,
+  ExternalServiceEntry,
+  ExternalServiceConfig,
+  RateLimitConfig,
+  ThinkingMode,
+  ThinkingLevelItem,
+  ThinkingCapability,
+} from '../../shared/types.js';
+
 export interface ChatRequest {
   message: string;
   sessionId?: string;
@@ -5,123 +33,30 @@ export interface ChatRequest {
   systemPrompt?: string;
 }
 
-export interface ThinkingCapability {
-  mode: 'levels' | 'switch' | 'none';
-  label: string;
-  levels?: { value: string; label: string }[];
-  switchConfig?: {
-    supportsBudget: boolean;
-    supportsPreserve: boolean;
-    budgetMax: number;
-    budgetDefault: number;
-  };
-}
+// ThinkingCapability / RateLimitConfig 的定义同样在 shared（见上方 import 与下方 re-export）。
+// 注：shared 版 RateLimitConfig 比原先此处那份多 llm_timeout_ms（后端字段，前端原版缺失）。
 
-export interface RateLimitConfig {
-  tool_rate_limit_per_minute: number;
-  agent_max_tool_calls_per_turn: number;
-  agent_max_consecutive_errors: number;
-  agent_max_turns: number;
-}
+// ─── 以下类型的定义已迁移至 src/shared/types.ts，此处仅透传（保持既有引用路径不变）───
 
-/** 工具权限：allow=直接执行 / ask=弹窗确认 / deny=禁用 */
-export type ToolPermissionValue = 'allow' | 'ask' | 'deny';
-
-/** 高级配置（后端 data/advanced-config.json，服务端实时生效） */
-export interface AdvancedConfig {
-  compaction: {
-    /** 自动压缩阈值（0.1-0.95，0.8=80%） */
-    threshold: number;
-    /** 尾部保留比例（0.1-0.5） */
-    tailRatio: number;
-    /** 压缩冷却时间毫秒 */
-    cooldownMs: number;
-    /** 防抖增益倍数 */
-    minGainRatio: number;
-    /** 尾部最少保留轮数 */
-    minTurns: number;
-    /** 头部保留消息数 */
-    headMessages: number;
-  };
-  subagent: {
-    /** 子代理最大轮数 */
-    maxTurns: number;
-    /** 子代理整体超时毫秒 */
-    timeoutMs: number;
-    /** 同一会话并发子代理数上限（并行派发是正常用法，此项仅防失控） */
-    maxConcurrent: number;
-  };
-  memory: {
-    /** 记忆最大条目数 */
-    maxEntries: number;
-    /** 单条记忆长度上限 */
-    maxNoteLength: number;
-  };
-  /** 危险命令黑名单（一行一个，与内置底线并集） */
-  commandBlacklist: string[];
-  search: {
-    /** 搜索超时毫秒 */
-    timeoutMs: number;
-    /** 搜索最大结果数 */
-    maxResults: number;
-  };
-  /** 摘要辅助模型：auto=优先 DeepSeek / main=当前主模型 */
-  summaryModel: 'auto' | 'main';
-}
-
-/** MCP 外部 server 配置（服务端 data/mcp-servers.json） */
-export interface McpServerConfig {
-  /** 服务名：唯一，仅字母/数字/下划线/连字符（默认内置服务为中文名特例） */
-  name: string;
-  /** 可执行命令 */
-  command: string;
-  /** 命令参数数组 */
-  args: string[];
-  /** 是否启用 */
-  enabled: boolean;
-  /** 描述 */
-  description: string;
-}
-
-export interface McpServersConfig {
-  servers: McpServerConfig[];
-}
-
-/** 扩展元信息（GET /api/extensions，含发现但未启用的扩展） */
-export interface ExtensionInfo {
-  /** 扩展名（唯一） */
-  name: string;
-  description: string;
-  /** 来源：npm=extensions/node_modules 包；dir=.pi/extensions 目录扩展 */
-  source: 'npm' | 'dir';
-  enabled: boolean;
-  toolCount: number;
-  commandCount: number;
-}
-
-/** 扩展命令元信息（GET /api/extensions/commands） */
-export interface ExtensionCommandInfo {
-  name: string;
-  description: string;
-  /** 所属扩展名 */
-  extension: string;
-}
-
-/** 外部服务条目（可自定义；id='kb'/'filesys' 为内置，MCP 工具以 fixed id 取链接） */
-export interface ExternalServiceEntry {
-  id: string;
-  /** 显示标题 */
-  title: string;
-  /** 查询链接（内置条目空串 = 未配置） */
-  url: string;
-  /** 描述（可选） */
-  description: string;
-}
-
-/** 外部服务配置（服务端 data/external-service-config.json，保存后即时生效） */
-export interface ExternalServiceConfig {
-  services: ExternalServiceEntry[];
-}
+export type {
+  ToolPermissionValue,
+  AdvancedConfig,
+  CompactionConfig,
+  SubagentConfig,
+  MemoryConfig,
+  SearchConfig,
+  McpServerConfig,
+  McpServersConfig,
+  ExtensionInfo,
+  ExtensionCommandInfo,
+  ExtensionSource,
+  ExternalServiceEntry,
+  ExternalServiceConfig,
+  RateLimitConfig,
+  ThinkingMode,
+  ThinkingLevelItem,
+  ThinkingCapability,
+};
 
 export interface ConfigData {
   // 通用
