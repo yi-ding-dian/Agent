@@ -4,7 +4,7 @@
  * 新增工具请按此清单步骤操作（详见 README「开发指南 · 新增工具」）：
  *   1. 在 backend/src/tools/ 新建 <name>.tool.ts，导出 createXxxTool（AgentTool + TypeBox schema）
  *   2. 在本文件 import 并加入 createCustomTools 返回数组
- *   3. 在 backend/src/config/tool-permission-config.ts 评估默认权限（allow/ask/deny），
+ *   3. 在 src/server/setting/tool-permission-config.ts 评估默认权限（allow/ask/deny），
  *      并同步前端 SettingsModal 的 DEFAULT_PERMISSIONS 初始值
  *   4. 前端 TOOL_LABELS 添加中文名（frontend/src/components/ 下工具展示处）
  *   5. 在 backend/tests/unit/ 补充单元测试

@@ -3,12 +3,12 @@ import { createServer } from 'node:http';
 import { createApp } from './app.js';
 import { config } from './config.js';
 import { initDatabase } from './db/database.js';
-import { initSessionManager, getSessionManager } from './services/session-manager.js';
-import { initExtensionLoader, runInputHooks } from './services/extension-loader.js';
-import { initMcpBridge } from './services/mcp-bridge.js';
-import { initSkillsLoader } from './services/skills-loader.js';
+import { initSessionManager, getSessionManager } from './session/manager.js';
+import { initExtensionLoader, runInputHooks } from './extension/loader.js';
+import { initMcpBridge } from './mcp/bridge.js';
+import { initSkillsLoader } from './skill/loader.js';
 import { UserRepository } from './db/user-repository.js';
-import { WSServer } from './ws/ws-server.js';
+import { WSServer } from './chat/ws-server.js';
 
 // 全局未处理 Promise 拒绝兜底
 process.on('unhandledRejection', (reason) => {

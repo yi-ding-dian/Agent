@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { UserRepository, type UserRecord } from '../db/user-repository.js';
-import { SessionStore } from '../db/session-store.js';
+import { SessionStore } from '../session/store.js';
 
 const userRepo = new UserRepository();
 const sessionStore = new SessionStore();

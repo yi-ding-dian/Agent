@@ -27,7 +27,7 @@ import {
   MEMORY_FILE_TEMPLATE,
   MEMORY_MAX_ENTRIES,
   MEMORY_MAX_FILE_LENGTH,
-} from '../../../src/server/services/memory-service.js';
+} from '../../../src/server/memory/service.js';
 
 let tmpDir: string;
 let originalDataDir: string;

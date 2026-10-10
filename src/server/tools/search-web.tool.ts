@@ -1,6 +1,6 @@
 import { Type, type Static } from 'typebox';
 import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from '@earendil-works/pi-agent-core';
-import { getAdvancedConfig } from '../config/advanced-config.js';
+import { getAdvancedConfig } from '../setting/advanced-config.js';
 
 /** 默认值（advanced-config.json 的 search 段，可运行时调整） */
 const DEFAULT_TIMEOUT_MS = 15_000;

@@ -18,7 +18,7 @@ import {
   sanitizeMessageForImport,
   serializeSessionToJsonl,
   parseSessionJsonl,
-} from '../../../src/server/services/session-jsonl.js';
+} from '../../../src/server/session/jsonl.js';
 
 let tmpDir: string;
 let originalDataDir: string;

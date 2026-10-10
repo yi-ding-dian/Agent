@@ -1,6 +1,6 @@
 import { Type, type Static } from 'typebox';
 import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from '@earendil-works/pi-agent-core';
-import { findSkillByName, getSkills, readSkillContent } from '../services/skills-loader.js';
+import { findSkillByName, getSkills, readSkillContent } from '../skill/loader.js';
 
 const RunSkillParams = Type.Object({
   skillName: Type.String({ description: '技能名称（如 code-review），即技能清单中的 <name>' }),

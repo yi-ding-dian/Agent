@@ -1,8 +1,8 @@
 import { config } from '../config.js';
 import { createCustomTools, type CreateCustomToolsOptions } from '../tools/index.js';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
-import type { Skill } from '../services/skills-loader.js';
-import { formatSkillsForPrompt } from '../services/skills-loader.js';
+import type { Skill } from '../skill/loader.js';
+import { formatSkillsForPrompt } from '../skill/loader.js';
 
 /** Agent 模式的系统提示词 — 自主 agent，拥有完整工具链 */
 export const AGENT_SYSTEM_PROMPT = `你是一个自主 AI Agent，拥有完整的工具执行能力。你可以：

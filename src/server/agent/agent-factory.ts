@@ -3,10 +3,10 @@ import type { AgentTool, AgentMessage, ThinkingLevel } from '@earendil-works/pi-
 import type { Model, Message } from '@earendil-works/pi-ai';
 import { streamSimple } from '@earendil-works/pi-ai/compat';
 import { config } from '../config.js';
-import { pendingConfirmationManager } from '../confirmation/manager.js';
-import { getToolPermissionAction } from '../config/tool-permission-config.js';
-import { runToolCallHooks, runBeforeProviderRequestHooks } from '../services/extension-loader.js';
-import { AgentRateLimiter } from '../services/rate-limiter.js';
+import { pendingConfirmationManager } from '../chat/confirmation.js';
+import { getToolPermissionAction } from '../setting/tool-permission-config.js';
+import { runToolCallHooks, runBeforeProviderRequestHooks } from '../extension/loader.js';
+import { AgentRateLimiter } from './rate-limiter.js';
 import type { SSEEvent } from '../utils/sse.js';
 import { buildThinkingCompat, buildOnPayload } from './model-adapter.js';
 

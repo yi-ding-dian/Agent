@@ -9,21 +9,21 @@
  *   5. 更新 README「API 接口」表
  */
 import { Router } from 'express';
-import { chatRouter } from './chat.routes.js';
-import { executeRouter } from './execute.routes.js';
-import { sessionRouter } from './session.routes.js';
-import { abortRouter } from './abort.routes.js';
-import { subagentRouter } from './subagent.routes.js';
-import { configRouter } from './config.routes.js';
-import { confirmationRouter } from './confirmation.routes.js';
+import { chatRouter } from '../chat/routes.js';
+import { executeRouter } from '../chat/execute.routes.js';
+import { sessionRouter } from '../session/routes.js';
+import { abortRouter } from '../chat/abort.routes.js';
+import { subagentRouter } from '../agent/subagent.routes.js';
+import { configRouter } from '../setting/routes.js';
+import { confirmationRouter } from '../chat/confirmation.routes.js';
 import { utilsRouter } from './utils.routes.js';
-import { tokenRouter } from './token.routes.js';
-import { steerRouter } from './steer.routes.js';
-import { syncRouter } from './sync.routes.js';
-import { memoryRouter } from './memory.routes.js';
-import { mcpRouter } from './mcp.routes.js';
-import { externalServiceRouter } from './external-service.routes.js';
-import { extensionsRouter } from './extensions.routes.js';
+import { tokenRouter } from '../token/routes.js';
+import { steerRouter } from '../chat/steer.routes.js';
+import { syncRouter } from '../chat/sync.routes.js';
+import { memoryRouter } from '../memory/routes.js';
+import { mcpRouter } from '../mcp/routes.js';
+import { externalServiceRouter } from '../external/routes.js';
+import { extensionsRouter } from '../extension/routes.js';
 
 export const apiRouter = Router();
 apiRouter.use(chatRouter);

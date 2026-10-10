@@ -3,8 +3,8 @@ import cors from 'cors';
 import path from 'node:path';
 import fs from 'node:fs';
 import { apiRouter } from './routes/index.js';
-import { agentConfigRouter } from './routes/external-service.routes.js';
-import { extProxyRouter } from './routes/ext-proxy.routes.js';
+import { agentConfigRouter } from './external/routes.js';
+import { extProxyRouter } from './external/proxy-routes.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { requestLogger } from './middleware/request-logger.js';
 import { createAuthRouter } from './auth/index.js';
@@ -32,7 +32,7 @@ export function createApp(frontendDir: string) {
   // 1.6 知识库资源透传代理（免鉴权，须在鉴权中间件之前）
   //     原因：AI 回复里知识库图片为相对路径 /api/ext/...，浏览器按当前源解析即打到本服务；
   //     而 <img> 请求不携带 Authorization 头（token 存 localStorage）→ 走鉴权必 401 破图。
-  //     安全边界见 routes/ext-proxy.routes.ts（origin 取自配置，前缀固定，非开放代理）。
+  //     安全边界见 external/proxy-routes.ts（origin 取自配置，前缀固定，非开放代理）。
   app.use('/api/ext', extProxyRouter);
 
   // 2. 认证中间件（保护后续 /api/* 路由）

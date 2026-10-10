@@ -7,10 +7,10 @@
  *
  * 设立缘由：以下接口此前在前后端各有一份定义，而两个包相互独立、TS 跨包不做检查，
  * 漂移不会被编译期发现 —— 其中 McpServerConfig 已实际漂移（后端有 cwd 字段、前端缺失）：
- *   AdvancedConfig        前端 client/types/api.ts   ↔  后端 server/config/advanced-config.ts
- *   McpServerConfig       前端 client/types/api.ts   ↔  后端 server/config/mcp-servers-config.ts
- *   ExtensionInfo         前端 client/types/api.ts   ↔  后端 server/services/extension-loader.ts
- *   ExternalServiceEntry  前端 client/types/api.ts   ↔  后端 server/config/external-service-config.ts
+ *   AdvancedConfig        前端 client/types/api.ts   ↔  后端 server/setting/advanced-config.ts
+ *   McpServerConfig       前端 client/types/api.ts   ↔  后端 server/mcp/config.ts
+ *   ExtensionInfo         前端 client/types/api.ts   ↔  后端 server/extension/loader.ts
+ *   ExternalServiceEntry  前端 client/types/api.ts   ↔  后端 server/external/config.ts
  * 另有 AdvancedConfig 的默认值也是两份（前端 SettingsModal.tsx 的 DEFAULT_ADVANCED
  * ↔ 后端 advanced-config.ts 的 DEFAULTS），靠注释维持一致，现一并收敛到本文件。
  *

@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { Router } from 'express';
 import { UserRepository } from '../db/user-repository.js';
-import { createToken, deleteToken, validateToken } from './token-store.js';
+import { createToken, deleteToken, validateToken } from '../token/store.js';
 
 // POST /api/auth/login — 用户登录
 const userRepo = new UserRepository();

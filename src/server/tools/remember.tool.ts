@@ -3,8 +3,8 @@ import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from '@earen
 import {
   appendMemory,
   type AppendMemoryResult,
-} from '../services/memory-service.js';
-import { getAdvancedConfig } from '../config/advanced-config.js';
+} from '../memory/service.js';
+import { getAdvancedConfig } from '../setting/advanced-config.js';
 
 const RememberParams = Type.Object({
   note: Type.String({

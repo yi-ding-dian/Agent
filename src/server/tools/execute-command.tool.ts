@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { Type, type Static } from 'typebox';
 import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from '@earendil-works/pi-agent-core';
-import { getAdvancedConfig } from '../config/advanced-config.js';
+import { getAdvancedConfig } from '../setting/advanced-config.js';
 import { killProcessGroup } from '../utils/process.js';
 
 /**

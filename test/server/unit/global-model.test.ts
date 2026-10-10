@@ -12,9 +12,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { config } from '../../../src/server/config.js';
 import { createQwenModel, NoDefaultModelError } from '../../../src/server/agent/llm-config.js';
-import { getGlobalModel, setGlobalModel } from '../../../src/server/config/global-model-config.js';
+import { getGlobalModel, setGlobalModel } from '../../../src/server/setting/global-model-config.js';
 import { initDatabase } from '../../../src/server/db/database.js';
-import { initSessionManager, getSessionManager } from '../../../src/server/services/session-manager.js';
+import { initSessionManager, getSessionManager } from '../../../src/server/session/manager.js';
 
 let tmpDir: string;
 let originalDataDir: string;

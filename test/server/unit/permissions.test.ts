@@ -14,7 +14,7 @@ import {
   getToolPermissionAction,
   updateToolPermissionConfig,
   resetToolPermissionConfig,
-} from '../../../src/server/config/tool-permission-config.js';
+} from '../../../src/server/setting/tool-permission-config.js';
 import { decideToolGate } from '../../../src/server/agent/agent-factory.js';
 
 let tmpDir: string;

@@ -44,7 +44,7 @@ import type { Model, Message } from '@earendil-works/pi-ai';
 import { streamSimple } from '@earendil-works/pi-ai/compat';
 import { Type, type Static } from 'typebox';
 import { config } from '../config.js';
-import { getAdvancedConfig } from '../config/advanced-config.js';
+import { getAdvancedConfig } from '../setting/advanced-config.js';
 import { createQwenModel } from '../agent/llm-config.js';
 import { getAgentModelConfig } from '../agent/agent-config.js';
 import { buildThinkingCompat, buildOnPayload } from '../agent/model-adapter.js';

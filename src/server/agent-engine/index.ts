@@ -13,15 +13,15 @@
 import { fileURLToPath } from 'node:url';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { Model } from '@earendil-works/pi-ai';
-import { AgentSessionService, type AgentRunMode } from '../services/agent-service.js';
+import { AgentSessionService, type AgentRunMode } from '../agent/service.js';
 import { createQwenModel, type ModelOverrides } from '../agent/llm-config.js';
 import { createAgentTools, buildAgentSystemPrompt } from '../agent/agent-config.js';
 import { ensureRequiredKey } from '../tools/index.js';
 import { createChatTools, CHAT_SYSTEM_PROMPT } from '../agent/chat-config.js';
-import { initExtensionLoader, getExtensionTools, type ExtensionModuleLoader } from '../services/extension-loader.js';
-import { initMcpBridge, getMcpBridge } from '../services/mcp-bridge.js';
-import { initSkillsLoader, getSkills } from '../services/skills-loader.js';
-import { pendingConfirmationManager, type ConfirmationDecision } from '../confirmation/manager.js';
+import { initExtensionLoader, getExtensionTools, type ExtensionModuleLoader } from '../extension/loader.js';
+import { initMcpBridge, getMcpBridge } from '../mcp/bridge.js';
+import { initSkillsLoader, getSkills } from '../skill/loader.js';
+import { pendingConfirmationManager, type ConfirmationDecision } from '../chat/confirmation.js';
 import { config } from '../config.js';
 
 /** 引擎运行配置（由 Electron 主进程传入） */

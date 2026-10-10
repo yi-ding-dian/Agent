@@ -6,7 +6,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AgentRateLimiter, type RateLimitLimits } from '../../../src/server/services/rate-limiter.js';
+import { AgentRateLimiter, type RateLimitLimits } from '../../../src/server/agent/rate-limiter.js';
 
 function makeLimits(partial: Partial<RateLimitLimits> = {}): RateLimitLimits {
   return {
